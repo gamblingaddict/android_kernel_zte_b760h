@@ -54,6 +54,7 @@ extern u32 g_devinfo_data_size;
 extern void adjust_kernel_cmd_line_setting_for_console(char*, char*);
 unsigned int mtk_get_max_DRAM_size(void);
 resource_size_t get_actual_DRAM_size(void);
+char *loc_androidboot_hardware=NULL;
 
 #ifdef CONFIG_MTK_MTD_NAND
 struct tag_pt_info otp_info;
@@ -1658,6 +1659,17 @@ void mt_fixup(struct tag *tags, char **cmdline, struct meminfo *mi)
             fiq_uart_fixup(uart_port);
         }
 #endif
+
+        //*cmdline = kernel cmdline + filtered lk cmdline
+        loc_androidboot_hardware=strstr(*cmdline, "androidboot.hardware");
+        if(loc_androidboot_hardware == NULL) //if no androidboot.variant pass from lk, add it here
+        {
+            sprintf(*cmdline, "%s%s%s", *cmdline, " androidboot.hardware=", "mt8127");
+            if (strlen(*cmdline) >= COMMAND_LINE_SIZE)
+            {
+                panic("Command line length is too long.\n\r");
+            }
+        }
 
         cmdline_filter(cmdline_tag, *cmdline);
 		if ((br_ptr = strstr(*cmdline, "boot_reason=")) != 0) {
