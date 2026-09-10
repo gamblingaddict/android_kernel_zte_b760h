@@ -61,6 +61,8 @@ config MTK_GPT_SCHEME_SUPPORT
 	help
 	  MTK Support for GUID Partition Table
 
+source "drivers/misc/mediatek/dum-char/Kconfig"
+
 config MTK_SHARED_SDCARD
 	bool "MTK_SHARED_SDCARD"
 	help

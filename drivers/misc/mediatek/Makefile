@@ -202,6 +202,7 @@ endif
 
 obj-y	+= accdet/
 obj-y	+= keypad/
+obj-$(CONFIG_MTK_DUM_CHAR)	+= dum-char/
 obj-$(CONFIG_MTK_SYSENV)	+= sysenv/
 
 ifdef CONFIG_CUSTOM_KERNEL_SSW
@@ -228,6 +229,7 @@ ifneq (,$(filter $(CONFIG_MTK_PLATFORM), "mt6572" "mt6582" "mt6592" "mt6595" "mt
 obj-y	+= masp/
 endif
 obj-$(CONFIG_MTK_MMC)	+= mmc-host/
+obj-$(CONFIG_MTK_DUM_CHAR)	+= pmt/
 obj-$(CONFIG_MTK_MTD_NAND)	+= nand/
 obj-$(CONFIG_MTK_GPT_SCHEME_SUPPORT)	+= partition/
 obj-$(CONFIG_MTK_SOUND) += smartpa/

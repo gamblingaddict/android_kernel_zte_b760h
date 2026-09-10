@@ -40,6 +40,7 @@
 #include <asm/uaccess.h>
 
 #ifdef CONFIG_MTK_EMMC_SUPPORT
+#include "partition_define.h"
 extern u32 g_emmc_mode_switch;
 #endif
 
