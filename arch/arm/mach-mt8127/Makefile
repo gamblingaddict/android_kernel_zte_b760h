@@ -80,7 +80,7 @@ obj-$(CONFIG_HIBERNATION)	+= cpu_hibernate.o swsusp.o
 
 KBUILD_AFLAGS	:=$(KBUILD_AFLAGS:-msoft-float=-Wa,-mfpu=neon)
 
-ifeq ($(MTK_ALPS_BOX_SUPPORT), yes)
+ifeq ($(CONFIG_MTK_ALPS_BOX_SUPPORT), y)
 ccflags-y += -DMTK_ALPS_BOX_SUPPORT
 endif
 

@@ -1626,6 +1626,9 @@ config MTK_AOSP_TVSTICK_SUPPORT
 	help
 	  To control TV stick output only from HDMI and without main display.
 
+config MTK_ALPS_BOX_SUPPORT
+	bool "MTK_ALPS_BOX_SUPPORT"
+
 config MTK_MT8193_HDMI_SUPPORT
 	bool "MTK_MT8193_HDMI_SUPPORT"
 	depends on MTK_HDMI_SUPPORT

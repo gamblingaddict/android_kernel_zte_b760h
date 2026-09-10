@@ -47,7 +47,7 @@ obj-y += ddp_cmdq_sec.o
 
 # EOF
 
-ifeq ($(MTK_ALPS_BOX_SUPPORT), yes)
+ifeq ($(CONFIG_MTK_ALPS_BOX_SUPPORT), y)
 ccflags-y += -DMTK_ALPS_BOX_SUPPORT
 endif
 
