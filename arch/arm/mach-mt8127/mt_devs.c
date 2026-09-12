@@ -39,6 +39,10 @@
 #include <linux/mdump.h>
 #endif
 
+#if defined(CONFIG_PSTORE_RAM)
+#include <linux/pstore_ram.h>
+#endif
+
 #ifdef CONFIG_RFKILL
 #include <linux/rfkill-gpio.h>
 #endif
@@ -679,6 +683,20 @@ static struct platform_device mt_spi_device = {
 
 #endif
 
+#if defined(CONFIG_PSTORE_RAM)
+static struct ramoops_platform_data ramoops_data = {
+	.mem_size	= 0x10000,
+	.mem_address	= 0x83F00000,
+	.console_size	= 0x10000,
+};
+
+static struct platform_device ramoops_dev = {
+      .name = "ramoops",
+      .dev = {
+              .platform_data = &ramoops_data,
+      },
+};
+#endif
 
 #if defined(CONFIG_USB_MTK_ACM_TEMP)
 struct platform_device usbacm_temp_device = {
@@ -2405,6 +2423,13 @@ retval = platform_device_register(&dummychar_device);
 	}
 #endif
 
+#if defined(CONFIG_PSTORE_RAM)
+    retval = platform_device_register(&ramoops_dev);
+    if (retval) {
+	printk(KERN_ERR "unable to register platform device\n");
+		return retval;
+	}
+#endif
 
 #if defined(CONFIG_ANDROID_PMEM)
     pdata_multimedia.start = PMEM_MM_START;;
@@ -2648,6 +2673,10 @@ void mt_reserve(void)
 {
 //    aee_dram_console_reserve_memory();
     mrdump_reserve_memory();
+
+#if defined(CONFIG_PSTORE_RAM)
+	memblock_reserve(ramoops_data.mem_address, ramoops_data.mem_size);
+#endif
 
 #ifdef CONFIG_MDUMP
         /* reserve lk memory & mdump buffer */
