@@ -37,24 +37,6 @@ typedef enum {
 	AEE_FIQ_STEP_KE_NESTED_PANIC = 64,
 } AEE_FIQ_STEP_NUM;
 
-#ifdef CONFIG_MTK_RAM_CONSOLE
-extern int aee_rr_curr_fiq_step(void);
-extern void aee_rr_rec_fiq_step(u8 i);
-extern void aee_rr_rec_reboot_mode(u8 mode);
-extern void aee_rr_rec_kdump_params(void *params);
-extern void aee_rr_rec_last_irq_enter(int cpu, int irq, u64 j);
-extern void aee_rr_rec_last_irq_exit(int cpu, int irq, u64 j);
-extern void aee_rr_rec_last_sched_jiffies(int cpu, u64 j, const char *comm);
-extern void aee_rr_rec_hoplug(int cpu, u8 data1, u8 data2);
-extern void aee_rr_rec_hotplug(int cpu, u8 data1, u8 data2, unsigned long data3);
-extern void aee_sram_fiq_log(const char *msg);
-extern void ram_console_write(struct console *console, const char *s, unsigned int count);
-extern void aee_sram_fiq_save_bin(const char *buffer, size_t len);
-#ifdef CONFIG_MTK_EMMC_SUPPORT
-extern void last_kmsg_store_to_emmc(void);
-#endif
-
-#else
 static inline int aee_rr_curr_fiq_step(void)
 {
 	return 0;
@@ -103,14 +85,5 @@ static inline void ram_console_write(struct console *console, const char *s, uns
 static inline void aee_sram_fiq_save_bin(unsigned char *buffer, size_t len)
 {
 }
-
-#ifdef CONFIG_MTK_EMMC_SUPPORT
-static inline void last_kmsg_store_to_emmc(void)
-{
-}
-#endif
-
-#endif
-
 
 #endif

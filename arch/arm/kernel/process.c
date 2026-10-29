@@ -33,7 +33,6 @@
 #include <linux/cpuidle.h>
 #include <linux/leds.h>
 #include <linux/console.h>
-#include <linux/mtk_ram_console.h>
 
 #include <asm/cacheflush.h>
 #include <asm/idmap.h>
@@ -361,10 +360,6 @@ void machine_power_off(void)
 	{
 	  printk("machine_shutdown: start, Proess(%s:%d)\n", tsk->comm, tsk->pid);	  
 	}
-
-#ifdef CONFIG_MTK_EMMC_SUPPORT 
-	last_kmsg_store_to_emmc();
-#endif
 
 	if (pm_power_off)
 		pm_power_off();

@@ -298,31 +298,8 @@ void aed_combo_exception_api(const int *log, int log_size, const int *phy, int p
 }
 EXPORT_SYMBOL(aed_combo_exception_api);
 
-char sram_printk_buf[256];
-
-void ram_console_write(struct console *console, const char *s, unsigned int count);
-
 void aee_sram_printk(const char *fmt, ...)
 {
-#ifdef CONFIG_MTK_RAM_CONSOLE
-	unsigned long long t;
-	unsigned long nanosec_rem;
-	va_list args;
-	int r, tlen;
-
-	va_start(args, fmt);
-
-	preempt_disable();
-	t = cpu_clock(smp_processor_id());
-	nanosec_rem = do_div(t, 1000000000);
-	tlen = sprintf(sram_printk_buf, ">%5lu.%06lu< ", (unsigned long)t, nanosec_rem / 1000);
-
-	r = vsnprintf(sram_printk_buf + tlen, sizeof(sram_printk_buf) - tlen, fmt, args);
-
-	ram_console_write(NULL, sram_printk_buf, r + tlen);
-	preempt_enable();
-	va_end(args);
-#endif
 }
 EXPORT_SYMBOL(aee_sram_printk);
 

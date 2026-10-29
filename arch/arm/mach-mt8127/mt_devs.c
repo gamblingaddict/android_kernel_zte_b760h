@@ -2649,9 +2649,6 @@ void mt_reserve(void)
 //    aee_dram_console_reserve_memory();
     mrdump_reserve_memory();
 
-#if defined(CONFIG_MTK_RAM_CONSOLE_USING_DRAM)
-    memblock_reserve(CONFIG_MTK_RAM_CONSOLE_DRAM_ADDR, CONFIG_MTK_RAM_CONSOLE_DRAM_SIZE);
-#endif
 #ifdef CONFIG_MDUMP
         /* reserve lk memory & mdump buffer */
 #ifdef BOOTLOADER_LK_ADDRESS

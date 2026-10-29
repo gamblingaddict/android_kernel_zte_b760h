@@ -150,12 +150,7 @@ struct mrdump_mini_elf_header {
 #define MRDUMP_MINI_HEADER_SIZE ALIGN(sizeof(struct mrdump_mini_elf_header), PAGE_SIZE)
 #define MRDUMP_MINI_DATA_SIZE (MRDUMP_MINI_NR_SECTION * MRDUMP_MINI_SECTION_SIZE)
 #define MRDUMP_MINI_BUF_SIZE (MRDUMP_MINI_HEADER_SIZE + MRDUMP_MINI_DATA_SIZE)
-
-#ifdef CONFIG_MTK_RAM_CONSOLE_DRAM_ADDR
-#define MRDUMP_MINI_BUF_PADDR (CONFIG_MTK_RAM_CONSOLE_DRAM_ADDR + 0xf0000)
-#else
 #define MRDUMP_MINI_BUF_PADDR 0
-#endif
 
 #if defined(CONFIG_MTK_AEE_MRDUMP)
 void mrdump_reserve_memory(void);

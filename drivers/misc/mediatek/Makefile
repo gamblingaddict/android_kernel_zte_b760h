@@ -85,7 +85,6 @@ obj-$(CONFIG_MTK_WFD_SUPPORT)  += uibc/
 obj-$(CONFIG_MTK_XHCI)   +=  xhci/
 
 #obj-y	+=  hdmitx/
-obj-y	+= ram_console/
 obj-y	+= thermal/
 obj-y	+= videocodec/
 obj-$(CONFIG_MTK_MJC_DRIVER)   += mjc/
