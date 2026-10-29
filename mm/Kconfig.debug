@@ -27,3 +27,19 @@ config PAGE_POISONING
 config PAGE_GUARD
 	bool
 	select WANT_PAGE_DEBUG_FLAGS
+
+config PAGE_EXTENSION
+	bool "Extend memmap on extra space for more information on page"
+	def_bool n
+	help
+	  Extend memmap on extra space for more information on page. This
+	  could be used for debugging features that need to insert extra
+	  field for every page. This extension enables us to save memory
+	  by not allocating this extra memory according to boottime
+	  configuration.
+
+config IDLE_PAGE_TRACKING
+	bool "Page tracking"
+	def_bool n
+	help
+	  Allows tracking of user pages

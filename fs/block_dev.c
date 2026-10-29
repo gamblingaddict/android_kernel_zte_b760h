@@ -1024,7 +1024,11 @@ int check_disk_change(struct block_device *bdev)
 	unsigned int events;
 
 	events = disk_clear_events(disk, DISK_EVENT_MEDIA_CHANGE |
-				   DISK_EVENT_EJECT_REQUEST);
+#ifdef CONFIG_MTK_MULTI_PARTITION_MOUNT_ONLY_SUPPORT	
+				   DISK_EVENT_EJECT_REQUEST | DISK_EVENT_MEDIA_DISAPPEAR);   //add DISK_EVENT_MEDIA_DISAPPEAR for sd hotplug
+#else
+					 DISK_EVENT_EJECT_REQUEST);
+#endif				   
 	if (!(events & DISK_EVENT_MEDIA_CHANGE))
 		return 0;
 
@@ -1079,10 +1083,8 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 	 */
 	if (!for_part) {
 		ret = devcgroup_inode_permission(bdev->bd_inode, perm);
-		if (ret != 0) {
-			bdput(bdev);
+		if (ret != 0)
 			return ret;
-		}
 	}
 
  restart:
@@ -1157,8 +1159,10 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 				goto out_clear;
 			BUG_ON(for_part);
 			ret = __blkdev_get(whole, mode, 1);
-			if (ret)
+			if (ret) {
+				bdput(whole);
 				goto out_clear;
+			}
 			bdev->bd_contains = whole;
 			bdev_inode_switch_bdi(bdev->bd_inode,
 				whole->bd_inode->i_data.backing_dev_info);
@@ -1211,7 +1215,6 @@ static int __blkdev_get(struct block_device *bdev, fmode_t mode, int for_part)
 	put_disk(disk);
 	module_put(owner);
  out:
-	bdput(bdev);
 
 	return ret;
 }
@@ -1296,6 +1299,9 @@ int blkdev_get(struct block_device *bdev, fmode_t mode, void *holder)
 		mutex_unlock(&bdev->bd_mutex);
 		bdput(whole);
 	}
+
+	if (res)
+		bdput(bdev);
 
 	return res;
 }

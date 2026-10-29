@@ -58,3 +58,5 @@ obj-$(CONFIG_DEBUG_KMEMLEAK) += kmemleak.o
 obj-$(CONFIG_DEBUG_KMEMLEAK_TEST) += kmemleak-test.o
 obj-$(CONFIG_CLEANCACHE) += cleancache.o
 obj-$(CONFIG_MEMORY_ISOLATION) += page_isolation.o
+obj-$(CONFIG_PAGE_EXTENSION) += page_ext.o
+obj-$(CONFIG_IDLE_PAGE_TRACKING) += page_idle.o

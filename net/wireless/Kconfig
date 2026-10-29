@@ -166,3 +166,21 @@ config LIB80211_DEBUG
 	  from lib80211.
 
 	  If unsure, say N.
+
+config CFG80211_ALLOW_RECONNECT
+	bool "Allow reconnect while already connected"
+	depends on CFG80211
+	default n
+	help
+	  cfg80211 stack doesn't allow to connect if you are already
+	  connected. This option allows to make a connection in this case.
+
+	  Select this option ONLY for wlan drivers that are specifically
+	  built for such purposes.
+
+config BCMDHD_USE_STATIC_BUF
+	bool "Use pre-allocated static memory for Broadcom's wifi driver"
+	default n
+	help
+	  Enable this option if Broadcom's wifi driver is used and
+          CONFIG_DHD_USE_STATIC_BUF is enabled for the driver.

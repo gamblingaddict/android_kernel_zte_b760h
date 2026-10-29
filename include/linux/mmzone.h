@@ -39,6 +39,9 @@ enum {
 	MIGRATE_UNMOVABLE,
 	MIGRATE_RECLAIMABLE,
 	MIGRATE_MOVABLE,
+#ifdef CONFIG_MTKPASR
+	MIGRATE_MTKPASR,
+#endif
 	MIGRATE_PCPTYPES,	/* the number of types on the pcp lists */
 	MIGRATE_RESERVE = MIGRATE_PCPTYPES,
 #ifdef CONFIG_CMA
@@ -67,6 +70,12 @@ enum {
 #  define is_migrate_cma(migratetype) unlikely((migratetype) == MIGRATE_CMA)
 #else
 #  define is_migrate_cma(migratetype) false
+#endif
+
+#ifdef CONFIG_MTKPASR
+#define is_migrate_mtkpasr(mt)	unlikely((mt) == MIGRATE_MTKPASR)
+#else
+#define	is_migrate_mtkpasr(mt)	false
 #endif
 
 #define for_each_migratetype_order(order, type) \
@@ -703,6 +712,9 @@ typedef struct pglist_data {
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
 	struct page *node_mem_map;
+#ifdef CONFIG_PAGE_EXTENSION
+	struct page_ext *node_page_ext;
+#endif
 #ifdef CONFIG_MEMCG
 	struct page_cgroup *node_page_cgroup;
 #endif
@@ -920,6 +932,14 @@ extern struct pglist_data contig_page_data;
 
 #endif /* !CONFIG_NEED_MULTIPLE_NODES */
 
+#ifdef CONFIG_MTKPASR
+#ifdef CONFIG_HIGHMEM
+#define MTKPASR_ZONE		(NODE_DATA(0)->node_zones + ZONE_HIGHMEM)
+#else
+#define MTKPASR_ZONE		(NODE_DATA(0)->node_zones)
+#endif
+#endif
+
 extern struct pglist_data *first_online_pgdat(void);
 extern struct pglist_data *next_online_pgdat(struct pglist_data *pgdat);
 extern struct zone *next_zone(struct zone *zone);
@@ -1086,6 +1106,7 @@ static inline unsigned long early_pfn_to_nid(unsigned long pfn)
 
 struct page;
 struct page_cgroup;
+struct page_ext;
 struct mem_section {
 	/*
 	 * This is, logically, a pointer to an array of struct
@@ -1103,6 +1124,14 @@ struct mem_section {
 
 	/* See declaration of similar field in struct zone */
 	unsigned long *pageblock_flags;
+#ifdef CONFIG_PAGE_EXTENSION
+	/*
+	 * If !SPARSEMEM, pgdat doesn't have page_ext pointer. We use
+	 * section. (see page_ext.h about this.)
+	 */
+	struct page_ext *page_ext;
+	unsigned long pad;
+#endif
 #ifdef CONFIG_MEMCG
 	/*
 	 * If !SPARSEMEM, pgdat doesn't have page_cgroup pointer. We use

@@ -603,7 +603,7 @@ static int tty_signal_session_leader(struct tty_struct *tty, int exit_session)
  *		BTM
  *		  redirect lock for undoing redirection
  *		  file list lock for manipulating list of ttys
- *		  tty_ldisc_lock from called functions
+ *		  tty_ldiscs_lock from called functions
  *		  termios_mutex resetting termios data
  *		  tasklist_lock to walk task list for hangup event
  *		    ->siglock to protect ->signal/->sighand
@@ -1390,8 +1390,7 @@ static int tty_reopen(struct tty_struct *tty)
 	struct tty_driver *driver = tty->driver;
 
 	if (test_bit(TTY_CLOSING, &tty->flags) ||
-			test_bit(TTY_HUPPING, &tty->flags) ||
-			test_bit(TTY_LDISC_CHANGING, &tty->flags))
+			test_bit(TTY_HUPPING, &tty->flags))
 		return -EIO;
 
 	if (driver->type == TTY_DRIVER_TYPE_PTY &&
@@ -1407,7 +1406,7 @@ static int tty_reopen(struct tty_struct *tty)
 	}
 	tty->count++;
 
-	WARN_ON(!test_bit(TTY_LDISC, &tty->flags));
+	WARN_ON(!tty->ldisc);
 
 	return 0;
 }
@@ -2203,7 +2202,7 @@ static int tty_fasync(int fd, struct file *filp, int on)
  *	FIXME: does not honour flow control ??
  *
  *	Locking:
- *		Called functions take tty_ldisc_lock
+ *		Called functions take tty_ldiscs_lock
  *		current->signal->tty check is safe without locks
  *
  *	FIXME: may race normal receive processing
@@ -2513,10 +2512,10 @@ static int tiocspgrp(struct tty_struct *tty, struct tty_struct *real_tty, pid_t 
 	if (session_of_pgrp(pgrp) != task_session(current))
 		goto out_unlock;
 	retval = 0;
-	spin_lock_irqsave(&tty->ctrl_lock, flags);
+	spin_lock_irqsave(&real_tty->ctrl_lock, flags);
 	put_pid(real_tty->pgrp);
 	real_tty->pgrp = get_pid(pgrp);
-	spin_unlock_irqrestore(&tty->ctrl_lock, flags);
+	spin_unlock_irqrestore(&real_tty->ctrl_lock, flags);
 out_unlock:
 	rcu_read_unlock();
 	return retval;
@@ -2567,6 +2566,28 @@ static int tiocsetd(struct tty_struct *tty, int __user *p)
 
 	ret = tty_set_ldisc(tty, ldisc);
 
+	return ret;
+}
+
+/**
+* 	tiocgetd - get line discipline
+* 	@tty: tty device
+* 	@p: pointer to user data
+*
+* 	Retrieves the line discipline id directly from the ldisc.
+*
+* 	Locking: waits for ldisc reference (in case the line discipline
+* 	is changing or the tty is being hungup)
+*/
+
+static int tiocgetd(struct tty_struct *tty, int __user *p)
+{
+	struct tty_ldisc *ld;
+	int ret;
+
+	ld = tty_ldisc_ref_wait(tty);
+	ret = put_user(ld->ops->num, p);
+	tty_ldisc_deref(ld);
 	return ret;
 }
 
@@ -2784,7 +2805,7 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case TIOCGSID:
 		return tiocgsid(tty, real_tty, p);
 	case TIOCGETD:
-		return put_user(tty->ldisc->ops->num, (int __user *)p);
+		return tiocgetd(tty, p);
 	case TIOCSETD:
 		return tiocsetd(tty, p);
 	case TIOCVHANGUP:
@@ -3018,7 +3039,7 @@ void initialize_tty_struct(struct tty_struct *tty,
 	tty->pgrp = NULL;
 	mutex_init(&tty->legacy_mutex);
 	mutex_init(&tty->termios_mutex);
-	mutex_init(&tty->ldisc_mutex);
+	init_ldsem(&tty->ldisc_sem);
 	init_waitqueue_head(&tty->write_wait);
 	init_waitqueue_head(&tty->read_wait);
 	INIT_WORK(&tty->hangup_work, do_tty_hangup);
