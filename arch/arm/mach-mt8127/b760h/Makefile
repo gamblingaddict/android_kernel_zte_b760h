@@ -33,7 +33,7 @@ obj-y   +=  alsps/
 endif
 
 obj-y   +=  cam_cal/
-obj-y   +=  camera/camera/
+#obj-y   +=  camera/camera/
 obj-y   +=  eeprom/
 ###obj-y   +=  flashlight/
 obj-y   +=  flashlight/constant_flashlight/
