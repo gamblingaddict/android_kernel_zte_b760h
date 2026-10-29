@@ -35,10 +35,6 @@
 #endif
 #define SERIALNO_LEN 32
 
-#ifdef CONFIG_MDUMP
-#include <linux/mdump.h>
-#endif
-
 #if defined(CONFIG_PSTORE_RAM)
 #include <linux/pstore_ram.h>
 #endif
@@ -2678,17 +2674,7 @@ void mt_reserve(void)
 	memblock_reserve(ramoops_data.mem_address, ramoops_data.mem_size);
 #endif
 
-#ifdef CONFIG_MDUMP
-        /* reserve lk memory & mdump buffer */
-#ifdef BOOTLOADER_LK_ADDRESS
-        memblock_reserve(BOOTLOADER_LK_ADDRESS, BOOTLOADER_LK_SIZE);
-#endif
-#ifdef CONFIG_MDUMP_COMPRESS
-        memblock_reserve(CONFIG_MDUMP_WITH_COMPRESS_ADDRESS, CONFIG_MDUMP_WITH_COMPRESS_WORKAREA_SIZE);
-#endif
-#else
-        mrdump_mini_reserve_memory();
-#endif /* CONFIG_MDUMP */
+    mrdump_mini_reserve_memory();
 
     /*
      * Dynamic reserved memory (by arm_memblock_steal)

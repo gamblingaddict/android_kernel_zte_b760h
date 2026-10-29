@@ -26,9 +26,6 @@
 #ifdef CONFIG_MTK_RTC
 #include <mach/mtk_rtc.h>
 #endif
-#ifdef CONFIG_MDUMP
-#include <linux/mdump.h>
-#endif
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -116,9 +113,6 @@ void panic(const char *fmt, ...)
 #ifdef CONFIG_MTK_RTC
 	if (rtc_get_reboot_reason() != RTC_REBOOT_REASON_SW_WDT)
 		rtc_mark_reboot_reason(RTC_REBOOT_REASON_PANIC);
-#endif
-#ifdef CONFIG_MDUMP
-	mdump_mark_reboot_reason(MDUMP_REBOOT_PANIC);
 #endif
 
 	printk(KERN_EMERG "Kernel panic - not syncing: %s\n",buf);

@@ -65,10 +65,6 @@
 #include <asm/io.h>
 #include <asm/unistd.h>
 
-#ifdef CONFIG_MDUMP
-#include <linux/mdump.h>
-#endif
-
 #ifdef CONFIG_MT_PRIO_TRACER
 # include <linux/prio_tracer.h>
 #endif
@@ -418,9 +414,6 @@ void kernel_restart(char *cmd)
 	else
 		printk(KERN_EMERG "Restarting system with command '%s'.\n", cmd);
 	kmsg_dump(KMSG_DUMP_RESTART);
-#ifdef CONFIG_MDUMP
-	mdump_mark_reboot_reason(MDUMP_REBOOT_NORMAL);
-#endif
 	machine_restart(cmd);
 }
 EXPORT_SYMBOL_GPL(kernel_restart);
@@ -457,9 +450,6 @@ EXPORT_SYMBOL_GPL(kernel_halt);
  */
 void kernel_power_off(void)
 {
-#ifdef CONFIG_MDUMP
-	mdump_mark_reboot_reason(MDUMP_COLD_RESET);
-#endif
 	kernel_shutdown_prepare(SYSTEM_POWER_OFF);
 	if (pm_power_off_prepare)
 		pm_power_off_prepare();
