@@ -2586,15 +2586,6 @@ retval = platform_device_register(&dummychar_device);
         return retval;
     }
 
-#ifdef CONFIG_ARCH_MT8127_TANK
-    retval = tank_wlan_init();
-
-    printk("%s[%d] ret: %d\n", __FILE__, __LINE__, retval);
-    if (retval != 0){
-        return retval;
-    }
-#endif
-
     return 0;
 }
 

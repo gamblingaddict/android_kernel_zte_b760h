@@ -177,10 +177,3 @@ config CFG80211_ALLOW_RECONNECT
 
 	  Select this option ONLY for wlan drivers that are specifically
 	  built for such purposes.
-
-config BCMDHD_USE_STATIC_BUF
-	bool "Use pre-allocated static memory for Broadcom's wifi driver"
-	default n
-	help
-	  Enable this option if Broadcom's wifi driver is used and
-          CONFIG_DHD_USE_STATIC_BUF is enabled for the driver.

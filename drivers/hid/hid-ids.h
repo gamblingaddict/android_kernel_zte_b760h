@@ -935,7 +935,4 @@
 #define USB_VENDOR_ID_SIS	0x0457
 #define USB_DEVICE_ID_SIS_TS	0x1013
 
-#define USB_VENDOR_ID_AMAZON                    0x1949
-#define USB_DEVICE_ID_AMAZON_GAMEPAD_WIFI       0x0406
-
 #endif

@@ -43,10 +43,6 @@
 #include <linux/sched.h>
 #include <linux/notifier.h>
 #include <linux/delay.h>
-// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-#include <linux/proc_fs.h>
-#include <linux/seq_file.h>
-// ACOS_MOD_END {fwk_crash_log_collection}
 
 #if defined (CONFIG_MTK_AEE_FEATURE) && defined (CONFIG_MT_ENG_BUILD)
 #include <linux/aee.h>
@@ -164,57 +160,7 @@ static int total_low_ratio = 1;
 static unsigned long lowmem_deathpending_timeout;
 static unsigned long lowmem_kill_timeout;
 
-// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-// Declarations
-void mali_session_memory_tracking_lmk();
-void ion_mm_heap_memory_detail_lmk();
-void show_free_areas_minimum_lmk(void);
-
-// Constants
-static int BUFFER_SIZE = 16*1024;
-static int ELEMENT_SIZE = 256;
-
-// Variables
-static char *lmk_log_buffer;
-static char *buffer_end;
-static char *head;
-static char *kill_msg_index;
-static char *previous_crash;
-static int buffer_remaining = 0;
-static int foreground_kill = 0;
-
-void lmk_add_to_buffer(const char * fmt, ...)
-{
-	if (lmk_log_buffer) {
-		if (head >= buffer_end) {
-			// Don't add more logs buffer is full
-			return;
-		}
-		if (buffer_remaining > 0) {
-			va_list args;
-			va_start(args, fmt);
-			int added_size = vsnprintf(head, buffer_remaining, fmt, args);
-			va_end(args);
-			if (added_size > 0) {
-				// Add 1 for null terminator
-				added_size = added_size + 1;
-				buffer_remaining = buffer_remaining - added_size;
-				head = head + added_size;
-			}
-		}
-	}
-}
-
-#define lowmem_print(level, x...)			\
-	do {						\
-		if (lowmem_debug_level >= (level))	\
-			pr_warn(x);			\
-		if (foreground_kill)			\
-			lmk_add_to_buffer(x);		\
-	} while (0)
-
-// In lowmem_print macro only added the lines 'if (foreground_kill)' and 'lmk_add_to_buffer(x)'
-// ACOS_MOD_END {fwk_crash_log_collection}
+#define lowmem_print(level, x...)
 
 static int test_task_flag(struct task_struct *p, int flag)
 {
@@ -486,56 +432,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			     p->comm, p->pid, REVERT_ADJ(oom_score_adj), oom_score_adj, tasksize);
 	}
 
-// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-#ifndef CONFIG_MT_ENG_BUILD
-	if (lmk_log_buffer && selected && selected_oom_score_adj == 0 && !print_extra_info) {
-		print_extra_info = 1;
-		foreground_kill = 1;
-		head = lmk_log_buffer;
-		buffer_remaining = BUFFER_SIZE;
-		if (kill_msg_index && previous_crash) {
-			strncpy(previous_crash, kill_msg_index, ELEMENT_SIZE);
-		}
-		lowmem_print(1, "======low memory killer=====\n");
-		lowmem_print(1, "Free memory other_free: %d, other_file:%d pages\n", other_free, other_file);
-		if (gfp_zone(sc->gfp_mask) == ZONE_NORMAL) {
-			lowmem_print(1, "ZONE_NORMAL\n");
-		} else {
-			lowmem_print(1, "ZONE_HIGHMEM\n");
-		}
-
-		for_each_process(tsk) {
-			struct task_struct *p2;
-			short oom_score_adj2;
-
-			if (tsk->flags & PF_KTHREAD)
-				continue;
-
-			/* if task no longer has any memory ignore it */
-			if (test_task_flag(tsk, TIF_MM_RELEASED))
-				continue;
-
-			p2 = find_lock_task_mm(tsk);
-			if (!p2)
-				continue;
-
-			oom_score_adj2 = p2->signal->oom_score_adj;
-#ifdef CONFIG_ZRAM
-			lowmem_print(1, "Candidate %d (%s), adj %d, score_adj %d, rss %lu, rswap %lu, to kill\n",
-				p2->pid, p2->comm, REVERT_ADJ(oom_score_adj2), oom_score_adj2, get_mm_rss(p2->mm),
-				get_mm_counter(p2->mm, MM_SWAPENTS));
-#else // CONFIG_ZRAM
-			lowmem_print(1, "Candidate %d (%s), adj %d, score_adj %d, rss %lu, to kill\n",
-				p2->pid, p2->comm, REVERT_ADJ(oom_score_adj2), oom_score_adj2, get_mm_rss(p2->mm));
-#endif // CONFIG_ZRAM
-			task_unlock(p2);
-		}
-		mali_session_memory_tracking_lmk();
-		kill_msg_index = head;
-	}
-#endif //CONFIG_MT_ENG_BUILD
-// ACOS_MOD_END {fwk_crash_log_collection}
-
 	if (selected) {
 		lowmem_print(1, "Killing '%s' (%d), adj %d, score_adj %hd,\n" \
 				"   to free %ldkB on behalf of '%s' (%d) because\n" \
@@ -553,21 +449,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		lowmem_deathpending_timeout = jiffies + HZ;
 		/* for skipping scan from direct reclaim in next 100ms*/
 		lowmem_kill_timeout = jiffies + HZ/10;
-
-// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-		if (print_extra_info) {
-			show_free_areas_minimum();
-			if (foreground_kill) {
-				lowmem_print(1, "\nlow memory info:\n");
-				show_free_areas_minimum_lmk();
-			}
-#ifdef CONFIG_ION_MTK
-			/* Show ION status */
-			lowmem_print(1, "ion_mm_heap_total_memory[%ld]\n",(unsigned long)ion_mm_heap_total_memory());
-			ion_mm_heap_memory_detail();
-#endif
-		}
-// ACOS_MOD_END {fwk_crash_log_collection}
 
 		/*
 		 * when kill adj=0 process trigger kernel warning, only in MTK internal eng load
@@ -616,14 +497,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	lowmem_print(4, "lowmem_shrink %lu, %x, return %d\n",
 		     nr_to_scan, sc->gfp_mask, rem);
 
-	/* ACOS_MOD_BEGIN {fwk_crash_log_collection} */
-	if (foreground_kill) {
-		ion_mm_heap_memory_detail_lmk();
-	}
-	/* ACOS_MOD_END {fwk_crash_log_collection} */
-
-	foreground_kill = 0; ///ACOS_MOD_ONELINE {fwk_crash_log_collection}
-
 	return rem;
 }
 
@@ -631,42 +504,6 @@ static struct shrinker lowmem_shrinker = {
 	.shrink = lowmem_shrink,
 	.seeks = DEFAULT_SEEKS * 16
 };
-
-// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-static int lowmem_proc_show(struct seq_file *m, void *v)
-{
-	if (!lmk_log_buffer) {
-		seq_printf(m, "lmk_logs are not functioning - something went wrong during init");
-		return 0;
-	}
-	char *ptr = lmk_log_buffer;
-	while (ptr < head) {
-		seq_printf(m, ptr, "\n");
-		int cur_line_len = strlen(ptr);
-		if (cur_line_len <= 0){
-			break;
-		}
-		// add 1 to skip the null terminator for C Strings
-		ptr = ptr + cur_line_len + 1;
-	}
-	if (previous_crash && previous_crash[0] !='\0'){
-		seq_printf(m, "previous crash: \n");
-		seq_printf(m, previous_crash, "\n");
-	}
-	return 0;
-}
-
-static int lowmem_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, lowmem_proc_show, NULL);
-}
-
-static const struct file_operations lowmem_proc_fops = {
-	.open       = lowmem_proc_open,
-	.read       = seq_read,
-	.release    = single_release
-};
-// ACOS_MOD_END {fwk_crash_log_collection}
 
 static int __init lowmem_init(void)
 {
@@ -701,32 +538,11 @@ static int __init lowmem_init(void)
 	printk(KERN_ALERT "[LMK]total_low_ratio[%d] - totalram_pages[%lu] - totalhigh_pages[%lu]\n", total_low_ratio, totalram_pages, totalhigh_pages);
 #endif
 
-	// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-	proc_create("lmk_logs", 0, NULL, &lowmem_proc_fops);
-	lmk_log_buffer = kzalloc(BUFFER_SIZE, GFP_KERNEL);
-	if (lmk_log_buffer) {
-		buffer_end = lmk_log_buffer + BUFFER_SIZE;
-		head = lmk_log_buffer;
-		buffer_remaining = BUFFER_SIZE;
-		kill_msg_index = NULL;
-		previous_crash = kzalloc(ELEMENT_SIZE, GFP_KERNEL);
-		if (!previous_crash) {
-			printk(KERN_ALERT "unable to allocate previous_crash for /proc/lmk_logs - previous_crash will not be logged");
-		}
-	} else {
-		printk(KERN_ALERT "unable to allocate buffer for /proc/lmk_logs - feature will be disabled");
-	}
-	// ACOS_MOD_END {fwk_crash_log_collection}
-
 	return 0;
 }
 
 static void __exit lowmem_exit(void)
 {
-	// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-	kfree(lmk_log_buffer);
-	kfree(previous_crash);
-	// ACOS_MOD_END {fwk_crash_log_collection}
 	unregister_shrinker(&lowmem_shrinker);
 }
 

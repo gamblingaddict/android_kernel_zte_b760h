@@ -338,10 +338,6 @@ struct mmc_host {
 	unsigned long           clkgate_delay;
 #endif
 
-#ifdef CONFIG_AMAZON_METRICS_LOG
-	struct delayed_work     metrics_delay_work; /* delayed metrics output */
-#endif /* CONFIG_AMAZON_METRICS_LOG */
-
 	/* host specific block data */
 	unsigned int		max_seg_size;	/* see blk_queue_max_segment_size */
 	unsigned short		max_segs;	/* see blk_queue_max_segments */

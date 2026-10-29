@@ -217,10 +217,6 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(present_smb),
 	/* ADB CMD Discharging */
 	POWER_SUPPLY_ATTR(adjust_power),
-	/* ACOS_MOD_BEGIN {metrics_log} */
-	POWER_SUPPLY_ATTR(suspend_drain),
-	POWER_SUPPLY_ATTR(suspend_realtime),
-	/* ACOS_MOD_END {metrics_log} */
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),

@@ -345,14 +345,6 @@ static void cfg80211_destroy_iface_wk(struct work_struct *work)
 }
 
 /* exported functions */
-
-// fosmod_wifi_memory begin
-#ifdef CONFIG_BCMDHD_USE_STATIC_BUF
-#define WLAN_STATIC_DHD_BCM_CFG80211	100
-extern void *product_wifi_mem_prealloc(int section, unsigned long size);
-#endif
-// fosmod_wifi_memory end
-
 struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 {
 	static int wiphy_counter;
@@ -371,16 +363,7 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 
 	alloc_size = sizeof(*rdev) + sizeof_priv;
 
-// fosmod_wifi_memory begin
-#ifdef CONFIG_BCMDHD_USE_STATIC_BUF
-	rdev = product_wifi_mem_prealloc(WLAN_STATIC_DHD_BCM_CFG80211, alloc_size);
-	if (rdev) {
-		memset(rdev, 0, alloc_size);
-	}
-#else
 	rdev = kzalloc(alloc_size, GFP_KERNEL);
-#endif
-// fosmod_wifi_memory end
 
 	if (!rdev)
 		return NULL;
@@ -395,11 +378,6 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 		wiphy_counter--;
 		mutex_unlock(&cfg80211_mutex);
 		/* ugh, wrapped! */
-// fosmod_wifi_memory begin
-#ifndef CONFIG_BCMDHD_USE_STATIC_BUF
-		kfree(rdev);
-#endif
-// fosmod_wifi_memory end
 		return NULL;
 	}
 
@@ -444,11 +422,6 @@ struct wiphy *wiphy_new(const struct cfg80211_ops *ops, int sizeof_priv)
 				   &rdev->rfkill_ops, rdev);
 
 	if (!rdev->rfkill) {
-// fosmod_wifi_memory begin
-#ifndef CONFIG_BCMDHD_USE_STATIC_BUF
-		kfree(rdev);
-#endif
-// fosmod_wifi_memory end
 		return NULL;
 	}
 
@@ -826,11 +799,6 @@ void cfg80211_dev_free(struct cfg80211_registered_device *rdev)
 	}
 	list_for_each_entry_safe(scan, tmp, &rdev->bss_list, list)
 		cfg80211_put_bss(&rdev->wiphy, &scan->pub);
-// fosmod_wifi_memory begin
-#ifndef CONFIG_BCMDHD_USE_STATIC_BUF
-	kfree(rdev);
-#endif
-// fosmod_wifi_memory end
 }
 
 void wiphy_free(struct wiphy *wiphy)

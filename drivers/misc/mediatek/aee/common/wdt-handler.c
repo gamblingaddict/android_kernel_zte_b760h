@@ -36,10 +36,6 @@ extern int dump_idle_info(char *buffer, int size);
 #include <linux/mdump.h>
 #endif
 
-#ifdef CONFIG_AMAZON_SIGN_OF_LIFE
-#include <linux/sign_of_life.h>
-#endif
-
 /* Some chip do not have irq dump, define a weak to avoid build error */
 __weak void mt_irq_dump(void)
 {
@@ -483,9 +479,6 @@ void aee_wdt_irq_info(void)
 	mdump_mark_reboot_reason(MDUMP_REBOOT_WATCHDOG);
 #endif
 
-#ifdef CONFIG_AMAZON_SIGN_OF_LIFE
-	life_cycle_set_boot_reason(WARMBOOT_BY_KERNEL_WATCHDOG);
-#endif
 	rtc_mark_reboot_reason(RTC_REBOOT_REASON_SW_WDT);
 	BUG();
 }

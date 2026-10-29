@@ -482,10 +482,6 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 	mutex_init(&host->slot.lock);
 	host->slot.cd_irq = -EINVAL;
 
-#if (defined(CONFIG_AMAZON_METRICS_LOG) && defined(ENABLE_SAMSUNG_EMMC_METRICS))
-	INIT_DELAYED_WORK(&host->metrics_delay_work,
-				mmc_host_metrics_work);
-#endif /* CONFIG_AMAZON_METRICS_LOG */
 	spin_lock_init(&host->lock);
 	init_waitqueue_head(&host->wq);
 	wake_lock_init(&host->detect_wake_lock, WAKE_LOCK_SUSPEND,

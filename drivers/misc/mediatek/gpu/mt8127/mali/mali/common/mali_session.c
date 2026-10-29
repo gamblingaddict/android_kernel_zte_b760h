@@ -101,30 +101,3 @@ void mali_session_memory_tracking(struct seq_file  *print_ctx)
 	total_mali_mem_size = _mali_ukk_report_total_memory_size();
 	_mali_osk_ctxprintf(print_ctx, "Mali mem usage: %u\nMali mem limit: %u\n", mali_mem_usage, total_mali_mem_size);
 }
-
-// ACOS_MOD_BEGIN {fwk_crash_log_collection}
-void lmk_add_to_buffer(const char * fmt, ...);
-
-void mali_session_memory_tracking_lmk()
-{
-	struct mali_session_data *session, *tmp;
-	u32 mali_mem_usage;
-	u32 total_mali_mem_size;
-		lmk_add_to_buffer("%-25s  %-10s  %-10s  %-15s  %-15s  %-10s  %-10s\n"\
-			"==============================================================================================================\n",
-			"Name", "pid", "mali_mem", "max_mali_mem",
-			"external_mem", "ump_mem", "dma_mem");
-	mali_session_lock();
-	MALI_SESSION_FOREACH(session, tmp, link) {
-		lmk_add_to_buffer("  %-25s  %-10u  %-10u  %-15u  %-15u  %-10u  %-10u\n",
-				    session->comm, session->pid,
-				    session->mali_mem_array[MALI_MEM_OS] + session->mali_mem_array[MALI_MEM_BLOCK], session->max_mali_mem_allocated,
-				    session->mali_mem_array[MALI_MEM_EXTERNAL], session->mali_mem_array[MALI_MEM_UMP],
-				    session->mali_mem_array[MALI_MEM_DMA_BUF]);
-	}
-	mali_session_unlock();
-	mali_mem_usage  = _mali_ukk_report_memory_usage();
-	total_mali_mem_size = _mali_ukk_report_total_memory_size();
-	lmk_add_to_buffer("Mali mem usage: %u\nMali mem limit: %u\n", mali_mem_usage, total_mali_mem_size);
-}
-// ACOS_MOD_END {fwk_crash_log_collection}
