@@ -39,7 +39,4 @@ config MAX_DRAM_SIZE_SUPPORT
 
 endmenu
 
-config ARCH_MT8127_TANK
-        bool "ARCH_MT8127_TANK"
-
 endif

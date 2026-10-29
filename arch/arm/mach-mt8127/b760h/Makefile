@@ -50,6 +50,3 @@ obj-y   +=  vibrator/
 ifeq ($(CONFIG_MTK_HDMI_SUPPORT),y)
 obj-y +=hdmi/
 endif
-obj-y += wifi/
-
-obj-y += lab126/
