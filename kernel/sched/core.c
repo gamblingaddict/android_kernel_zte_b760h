@@ -98,10 +98,6 @@
 #include <mtlbprof/mtlbprof.h>
 #include <mtlbprof/mtlbprof_stat.h>
 
-#ifdef CONFIG_MT_PRIO_TRACER
-# include <linux/prio_tracer.h>
-#endif
-
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
 {
 	unsigned long delta;
@@ -3881,60 +3877,6 @@ out_unlock:
 }
 #endif
 
-#ifdef CONFIG_MT_PRIO_TRACER
-void set_user_nice_core(struct task_struct *p, long nice)
-{
-	int old_prio, delta, on_rq;
-	unsigned long flags;
-	struct rq *rq;
-
-	if (TASK_NICE(p) == nice || nice < -20 || nice > 19)
-		return;
-	/*
-	 * We have to be careful, if called from sys_setpriority(),
-	 * the task might be in the middle of scheduling on another CPU.
-	 */
-	rq = task_rq_lock(p, &flags);
-	/*
-	 * The RT priorities are set via sched_setscheduler(), but we still
-	 * allow the 'normal' nice value to be set - but as expected
-	 * it wont have any effect on scheduling until the task is
-	 * SCHED_FIFO/SCHED_RR:
-	 */
-	if (task_has_rt_policy(p)) {
-		p->static_prio = NICE_TO_PRIO(nice);
-		goto out_unlock;
-	}
-	on_rq = p->on_rq;
-	if (on_rq)
-		dequeue_task(rq, p, 0);
-
-	p->static_prio = NICE_TO_PRIO(nice);
-	set_load_weight(p);
-	old_prio = p->prio;
-	p->prio = effective_prio(p);
-	delta = p->prio - old_prio;
-
-	if (on_rq) {
-		enqueue_task(rq, p, 0);
-		/*
-		 * If the task increased its priority or is running and
-		 * lowered its priority, then reschedule its CPU:
-		 */
-		if (delta < 0 || (delta > 0 && task_running(rq, p)))
-			resched_task(rq->curr);
-	}
-out_unlock:
-	task_rq_unlock(rq, p, &flags);
-}
-
-void set_user_nice(struct task_struct *p, long nice)
-{
-	set_user_nice_core(p, nice);
-	/* setting nice implies to set a normal sched policy */
-	update_prio_tracer(task_pid_nr(p), NICE_TO_PRIO(nice), 0, PTS_KRNL);
-}
-#else /* !CONFIG_MT_PRIO_TRACER */
 void set_user_nice(struct task_struct *p, long nice)
 {
 	int old_prio, delta, on_rq;
@@ -3980,7 +3922,6 @@ void set_user_nice(struct task_struct *p, long nice)
 out_unlock:
 	task_rq_unlock(rq, p, &flags);
 }
-#endif
 EXPORT_SYMBOL(set_user_nice);
 
 /*
@@ -4032,11 +3973,7 @@ SYSCALL_DEFINE1(nice, int, increment)
 	retval = security_task_setnice(current, nice);
 	if (retval)
 		return retval;
-#ifdef CONFIG_MT_PRIO_TRACER
-	set_user_nice_syscall(current, nice);
-#else
 	set_user_nice(current, nice);
-#endif
 	return 0;
 }
 
@@ -4323,36 +4260,11 @@ recheck:
  *
  * NOTE that the task may be already dead.
  */
-#ifdef CONFIG_MT_PRIO_TRACER
-int sched_setscheduler_core(struct task_struct *p, int policy,
-			    const struct sched_param *param)
-{
-	return __sched_setscheduler(p, policy, param, true);
-}
-
-int sched_setscheduler(struct task_struct *p, int policy,
-		       const struct sched_param *param)
-{
-	int retval;
-
-	retval = sched_setscheduler_core(p, policy, param);
-	if (!retval) {
-		int prio = param->sched_priority & ~MT_ALLOW_RT_PRIO_BIT;
-		if (!rt_policy(policy))
-			prio = __normal_prio(p);
-		else
-			prio = MAX_RT_PRIO-1 - prio;
-		update_prio_tracer(task_pid_nr(p), prio, policy, PTS_KRNL);
-	}
-	return retval;
-}
-#else /* !CONFIG_MT_PRIO_TRACER */
 int sched_setscheduler(struct task_struct *p, int policy,
 		       const struct sched_param *param)
 {
 	return __sched_setscheduler(p, policy, param, true);
 }
-#endif
 EXPORT_SYMBOL_GPL(sched_setscheduler);
 
 /**
@@ -4366,37 +4278,11 @@ EXPORT_SYMBOL_GPL(sched_setscheduler);
  * stop_machine(): we create temporary high priority worker threads,
  * but our caller might not have that capability.
  */
-#ifdef CONFIG_MT_PRIO_TRACER
-int sched_setscheduler_nocheck_core(struct task_struct *p, int policy,
-				    const struct sched_param *param)
-{
-	return __sched_setscheduler(p, policy, param, false);
-}
-
-
-int sched_setscheduler_nocheck(struct task_struct *p, int policy,
-			       const struct sched_param *param)
-{
-        int retval;
-
-	retval = sched_setscheduler_nocheck_core(p, policy, param);
-	if (!retval) {
-		int prio = param->sched_priority & ~MT_ALLOW_RT_PRIO_BIT;
-		if (!rt_policy(policy))
-			prio = __normal_prio(p);
-		else
-			prio = MAX_RT_PRIO-1 - prio;
-		update_prio_tracer(task_pid_nr(p), prio, policy, PTS_KRNL);
-	}
-	return retval;
-}
-#else /* !CONFIG_MT_PRIO_TRACER */
 int sched_setscheduler_nocheck(struct task_struct *p, int policy,
 			       const struct sched_param *param)
 {
 	return __sched_setscheduler(p, policy, param, false);
 }
-#endif
 
 static int
 do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
@@ -4413,13 +4299,8 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	rcu_read_lock();
 	retval = -ESRCH;
 	p = find_process_by_pid(pid);
-#ifdef CONFIG_MT_PRIO_TRACER
-	if (p != NULL)
-		retval = sched_setscheduler_syscall(p, policy, &lparam);
-#else
 	if (p != NULL)
 		retval = sched_setscheduler(p, policy, &lparam);
-#endif
 
 	rcu_read_unlock();
 

@@ -271,12 +271,6 @@ config MTK_HIBERNATION
 	default y
 	help
 
-config MT_PRIO_TRACER
-	bool "Record priority changes"
-	default n
-	help
-	  Export device node under debugfs/prio_tracer
-
 config MTK_WQ_DEBUG
 	bool "mtk workqueue debug"
 	default n

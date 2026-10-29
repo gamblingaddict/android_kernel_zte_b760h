@@ -2043,14 +2043,6 @@ extern int sched_setscheduler(struct task_struct *, int,
 extern int sched_setscheduler_nocheck(struct task_struct *, int,
 				      const struct sched_param *);
 
-#ifdef CONFIG_MT_PRIO_TRACER
-extern void set_user_nice_core(struct task_struct *p, long nice);
-extern int sched_setscheduler_core(struct task_struct *, int,
-				   const struct sched_param *);
-extern int sched_setscheduler_nocheck_core(struct task_struct *, int,
-					   const struct sched_param *);
-#endif
-
 extern struct task_struct *idle_task(int cpu);
 /**
  * is_idle_task - is the specified task an idle task?

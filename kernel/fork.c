@@ -84,10 +84,6 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
 
-#ifdef CONFIG_MT_PRIO_TRACER
-# include <linux/prio_tracer.h>
-#endif
-
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
  */
@@ -1688,10 +1684,6 @@ struct task_struct * __cpuinit fork_idle(int cpu)
  * It copies the process, and if successful kick-starts
  * it and waits for it to finish using the VM if required.
  */
-#ifdef CONFIG_SCHEDSTATS
-/* mt shceduler profiling*/
-extern void save_mtproc_info(struct task_struct *p, unsigned long long ts);
-#endif
 long do_fork(unsigned long clone_flags,
 	      unsigned long stack_start,
 	      unsigned long stack_size,
@@ -1755,11 +1747,6 @@ long do_fork(unsigned long clone_flags,
 			get_task_struct(p);
 		}
 
-#ifdef CONFIG_SCHEDSTATS
-        /* mt shceduler profiling*/
-        save_mtproc_info(p, sched_clock());	
-        pr_debug("[%d:%s] fork [%d:%s]\n", current->pid, current->comm, p->pid, p->comm);
-#endif
 		wake_up_new_task(p);
 
 		/* forking complete and child started to run, tell ptracer */
@@ -1772,10 +1759,6 @@ long do_fork(unsigned long clone_flags,
 		}
 
 		put_pid(pid);
-#ifdef CONFIG_MT_PRIO_TRACER
-		create_prio_tracer(task_pid_nr(p));
-		update_prio_tracer(task_pid_nr(p), p->prio, p->policy, PTS_KRNL);
-#endif
 	} else {
 		nr = PTR_ERR(p);
 		printk("[%d:%s] fork fail:[%p, %d]\n", current->pid, current->comm, p,(int) nr);
