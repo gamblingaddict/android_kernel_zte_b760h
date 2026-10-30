@@ -16,3 +16,7 @@ endif
 ifeq ($(CONFIG_MTK_EMMC_SUPPORT_OTP),yes)
 obj-$(CONFIG_MTK_MMC) += emmc_otp.o
 endif
+
+ifeq ($(CONFIG_MTK_ALPS_BOX_SUPPORT), y)
+ccflags-y += -DCONFIG_MTK_PMIC_MT6397
+endif

@@ -612,7 +612,7 @@ struct msdc_hw msdc1_hw = {
 			.cmdrddly		= 0,
     .host_function	= MSDC_SD,
     .boot			= 0,
-    .cd_level		= MSDC_CD_HIGH,
+    .cd_level		= MSDC_CD_LOW,
 };
 #endif
 #endif
