@@ -27,7 +27,10 @@
 
 #include "star_dev.h"
 
-#ifdef CONFIG_ARM64
+#if defined(CONFIG_ARCH_MT8127)
+#include <linux/io.h>
+/* Logging definitions come from star_regUtil.h; no TV-only header needed. */
+#elif defined(CONFIG_ARM64)
 #include "linux/soc/mediatek/mt53xx_linux.h"
 #else
 #include <mach/mt53xx_linux.h>

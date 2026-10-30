@@ -27,7 +27,10 @@ static spinlock_t star_lock;
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 
-#ifdef CONFIG_64BIT
+#if defined(CONFIG_ARCH_MT8127)
+/* MT8127's vendor clock manager; target probe uses clock ID 0x1c. */
+#include <mach/mt_clkmgr.h>
+#elif defined(CONFIG_64BIT)
 #include <linux/soc/mediatek/mt53xx_linux.h>
 #else
 #include <mach/mt53xx_linux.h>
@@ -49,6 +52,16 @@ static void __iomem *pdwnc_base;
 //static u32 eth_pdwnc_base = 0;
 //static u32 eth_chksum_base = 0;
 static void __iomem *ipll_base1;
+#if defined(CONFIG_ARCH_MT8127)
+/* Probe decompilation keeps the Ethernet gate enabled while the NIC exists. */
+static int star_mt8127_clock_enabled;
+#define STAR_MT8127_CLK_ID       0x1c
+#define STAR_MT8127_CLK_NAME     "star-eth"
+#define STAR_MT8127_MAC_VBASE    0xf1280000UL
+#define STAR_MT8127_PINMUX_VBASE 0xf0005600UL
+#define STAR_MT8127_IPLL_VBASE   0xf0000000UL
+#define STAR_MT8127_IRQ          0x6d
+#endif
 //static u32 ipll_base2 = 0;
 //static u32 bsp_base = 0;
 static StarDev *star_dev = NULL;
@@ -562,6 +575,48 @@ static void star_netpoll(struct net_device *dev)
 }
 #endif
 
+#if defined(CONFIG_ARCH_MT8127)
+/* ---- MAC address from the kernel command line: "mac=0C:12:62:90:D4:75" ----
+ * The bootloader passes all zeroes when the unit has no valid MAC. */
+static int star_cmdline_mac(u8 *out)
+{
+	const char *p = saved_command_line;
+	u8 mac[6];
+	int i;
+
+	while (p && (p = strstr(p, "mac=")) != NULL) {
+		const char *q;
+		char *end;
+
+		if (p != saved_command_line && p[-1] != ' ') {
+			p += 4;
+			continue;
+		}
+		q = p + 4;
+		for (i = 0; i < 6; i++) {
+			unsigned long v = simple_strtoul(q, &end, 16);
+
+			if (end == q || v > 0xff)
+				break;
+			mac[i] = (u8)v;
+			q = end;
+			if (i < 5) {
+				if (*q != ':')
+					break;
+				q++;
+			}
+		}
+		if (i == 6 && is_valid_ether_addr(mac)) {
+			memcpy(out, mac, 6);
+			return 1;
+		}
+		p += 4;
+	}
+	return 0;
+}
+
+#endif
+
 static int star_open(struct net_device *dev)
 {
 	StarPrivate *starPrv = NULL;
@@ -588,7 +643,12 @@ static int star_open(struct net_device *dev)
     
 	/* Register NIC interrupt */
 	STAR_MSG(STAR_DBG, "request interrupt vector=%d\n", dev->irq);
+#if defined(CONFIG_ARCH_MT8127)
+	/* Target mac_start_up passes flags=2 (IRQF_TRIGGER_FALLING) here. */
+	if (request_irq(dev->irq, star_isr, IRQF_TRIGGER_FALLING, dev->name, dev) != 0)
+#else
 	if (request_irq(dev->irq, star_isr, 0, dev->name, dev) != 0)	/* request non-shared interrupt */
+#endif
 	{
 		STAR_MSG(STAR_ERR, "interrupt %d request fail\n", dev->irq);
 		return -ENODEV;
@@ -598,10 +658,12 @@ static int star_open(struct net_device *dev)
 	/* ===== There are 3 modes: Internal switch/internal phy/RvMII(IC+175C) ===== */
 	if (1) //(StarIsASICMode(starDev))
 	{
+#if !defined(CONFIG_ARCH_MT8127)
 		/* MII Pad output enable */
 		StarSetBit(STAR_ETHPHY(starDev->base), STAR_ETHPHY_MIIPAD_OE);
 		/* Force SMI Enable */
 		StarSetBit(STAR_ETHPHY(starDev->base), STAR_ETHPHY_FRC_SMI_EN);
+#endif /* MT8127: the target never touches ETHPHY(0x6c) in probe/open */
 		/* Disable extended retry - for 10-half mode runs normally */
 		StarClearBit(STAR_TEST1(starDev->base), STAR_TEST1_EXTEND_RETRY);
 		
@@ -975,7 +1037,15 @@ static int star_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	
 
 	retval = StarDmaTxSet(starDev, dmaBuf, skb->len, (uintptr_t)skb);
-
+	if (retval < 0)
+	{
+		/* No free descriptor: drop the packet instead of leaking skb and mapping */
+		spin_unlock_irqrestore(&starPrv->lock, flags);
+		dma_unmap_single(mtk_dev, dmaBuf, skb->len, DMA_TO_DEVICE);
+		dev_kfree_skb(skb);
+		starDev->stats.tx_dropped++;
+		return NETDEV_TX_OK;
+	}
 
 	if (starDev->txNum == starDev->txRingSize) /* Tx descriptor ring full */
 	{
@@ -1140,6 +1210,7 @@ static int star_ioctl(struct net_device *dev, struct ifreq *req, int cmd)
             rc = 0;
             break;
 
+#ifdef INTERNAL_PHY
 		case SIOC_PHY_CTRL_CMD: /* for linux ethernet diag command */
         {
             struct ioctl_phy_ctrl_cmd *pc_cmd = (struct ioctl_phy_ctrl_cmd *)&req->ifr_data;
@@ -1259,6 +1330,7 @@ static int star_ioctl(struct net_device *dev, struct ifreq *req, int cmd)
             rc = 0;
 		}
         break;
+#endif /* INTERNAL_PHY */
 
 #if defined(ETH_SUPPORT_WOL)
         case SIOC_SET_WOP_CMD:
@@ -2097,9 +2169,23 @@ static int star_probe(struct platform_device *pdev)
 	StarDev *starDev;
     struct net_device *netdev = NULL;
 
-	/* Base Register of  Ethernet */
-		/* DO NOT use ioremap to mapping ethernet hardware address */
-#ifdef CONFIG_OF
+	/* Base Register of Ethernet. */
+	/*
+	 * The MT8127 binary assigns these already-mapped kernel virtual addresses
+	 * directly; it does not ioremap them. Confirm that the target 3.10 kernel
+	 * retains this vendor IO virtual map before enabling this branch.
+	 */
+#if defined(CONFIG_ARCH_MT8127)
+	result = enable_clock(STAR_MT8127_CLK_ID, STAR_MT8127_CLK_NAME);
+	if (result) {
+		pr_err("star: unable to enable MT8127 Ethernet clock (%d)\n", result);
+		return result;
+	}
+	star_mt8127_clock_enabled = 1;
+	eth_base = (void __iomem *)(unsigned long)STAR_MT8127_MAC_VBASE;
+	pinmux_base = (void __iomem *)(unsigned long)STAR_MT8127_PINMUX_VBASE;
+	ipll_base1 = (void __iomem *)(unsigned long)STAR_MT8127_IPLL_VBASE;
+#elif defined(CONFIG_OF)
 		struct device_node *np1;
 		np1 = of_find_compatible_node(NULL, NULL, "Mediatek, MAC");
 		if (!np1) {
@@ -2228,7 +2314,6 @@ static int star_probe(struct platform_device *pdev)
 	starDev->pinmuxBase = pinmux_base;
 	starDev->ethIPLL1Base = ipll_base1;
 
-    StarGetHwMacAddr(starDev, macAddr);
 	#if 0
     starDev->pdwncBase = pdwnc_base;
     starDev->pinmuxBase = pinmux_base;
@@ -2238,27 +2323,43 @@ static int star_probe(struct platform_device *pdev)
     starDev->ethIPLL2Base = ipll_base2;
     starDev->bspBase = bsp_base;
     #endif
-    
+
     starDev->starPrv = starPrv;
 
-    if((0==StarGetReg(starDev->base+0x14)) && (0==StarGetReg(starDev->base+0x18)))
-    {
+#if defined(CONFIG_ARCH_MT8127)
+    /* The target probe wakes the MAC before applying its board pinmux setup. */
+    StarNICPdSet(starDev, 0);
+    if (StarHwInit(starDev) != 0) {
+        STAR_MSG(STAR_ERR, "MT8127 Ethernet MAC HW init fail!\n");
+        result = -ENODEV;
+        goto out;
+    }
+    StarGetHwMacAddr(starDev, macAddr);
+    if (star_cmdline_mac(macAddr))
+        STAR_MSG(STAR_WARN, "MAC from command line: %pM\n", macAddr);
+    /* Some boards do not preload a MAC address; use the source driver's default. */
+    if (!is_valid_ether_addr(macAddr)) {
+        /* DEFAULT_MAC_ADDRESS is an initializer list, so it needs an array. */
+        static const u8 defMac[ETH_ADDR_LEN] = DEFAULT_MAC_ADDRESS;
+        memcpy(macAddr, defMac, ETH_ADDR_LEN);
+    }
+#else
+    StarGetHwMacAddr(starDev, macAddr);
+    if ((0 == StarGetReg(starDev->base + 0x14)) &&
+        (0 == StarGetReg(starDev->base + 0x18))) {
         STAR_MSG(STAR_ERR, "%s, Not support network, IS_SupportNETWORK=FALSE, MAC is not set, so do not init ethernet hw\n", __FUNCTION__);
         result = -ENODEV;
         goto out;
     }
-    else
-    {
-        /* Init hw related settings (eg. pinmux, clock ...etc) */
-        if (StarHwInit(starDev) != 0)
-        {
-            STAR_MSG(STAR_ERR, "Ethernet MAC HW init fail!\n");
-            result = -ENODEV;
-            goto out;
-        }
+    /* Init hw related settings (eg. pinmux, clock ...etc) */
+    if (StarHwInit(starDev) != 0) {
+        STAR_MSG(STAR_ERR, "Ethernet MAC HW init fail!\n");
+        result = -ENODEV;
+        goto out;
     }
-
-    StarNICPdSet(starDev , 1);
+    /* Preserve the TV driver's power-down-until-open behavior on other SoCs. */
+    StarNICPdSet(starDev, 1);
+#endif
 
 	starPrv->mii.dev = netdev;
 	starPrv->mii.mdio_read = mdcMdio_read;
@@ -2269,7 +2370,11 @@ static int star_probe(struct platform_device *pdev)
 
     netdev->addr_len = ETH_ADDR_LEN;
 	memcpy(netdev->dev_addr, macAddr, netdev->addr_len);       /* Set MAC address */
+#if defined(CONFIG_ARCH_MT8127)
+	netdev->irq = STAR_MT8127_IRQ; /* target probe assigns IRQ 0x6d (109) */
+#else
 	netdev->irq = ETH_IRQ;
+#endif
 	netdev->base_addr = (unsigned long)eth_base;
 	netdev->netdev_ops = &star_netdev_ops;
 #ifdef STARMAC_SUPPORT_ETHTOOL
@@ -2318,7 +2423,7 @@ static int star_probe(struct platform_device *pdev)
 	
 out:
 
-    if (starPrv->desc_virAddr)
+    if (starPrv && starPrv->desc_virAddr)
     {
 	    dma_free_coherent(mtk_dev, 
                         TX_DESC_TOTAL_SIZE + RX_DESC_TOTAL_SIZE, 
@@ -2361,6 +2466,12 @@ out:
         free_netdev(netdev);
         netdev = NULL;
     }
+#if defined(CONFIG_ARCH_MT8127)
+    if (star_mt8127_clock_enabled) {
+        disable_clock(STAR_MT8127_CLK_ID, STAR_MT8127_CLK_NAME);
+        star_mt8127_clock_enabled = 0;
+    }
+#endif
     return result;
 	
 }
@@ -2409,6 +2520,7 @@ static int star_cleanup(struct platform_device *pdev)
         }
         
 #endif       
+#if !defined(CONFIG_ARCH_MT8127)
         if (ipll_base1)
         {
             iounmap((u32 *)ipll_base1);
@@ -2426,8 +2538,15 @@ static int star_cleanup(struct platform_device *pdev)
             iounmap((u32 *)eth_base);
             eth_base = 0;
         }
+#endif
 		free_netdev(netdev);
 	} 
+#if defined(CONFIG_ARCH_MT8127)
+    if (star_mt8127_clock_enabled) {
+        disable_clock(STAR_MT8127_CLK_ID, STAR_MT8127_CLK_NAME);
+        star_mt8127_clock_enabled = 0;
+    }
+#endif
     star_dev = NULL;
     return 0;
 }
@@ -2475,8 +2594,10 @@ struct platform_driver star_pdrv = {
         .owner = THIS_MODULE,
     },
     .probe = star_probe,
+#if !defined(CONFIG_ARCH_MT8127)
     .suspend = star_suspend,
     .resume = star_resume,
+#endif
     .remove = star_cleanup,
 };
 

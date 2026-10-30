@@ -13,6 +13,119 @@ uintptr_t rx_skb_reserve[RX_DESC_NUM];
 static u32 patch_rtl8201el = 0;
 static int eth_phy_id = 32;
 extern u32 fgOpenStBeforeSuspend;
+
+#if defined(CONFIG_ARCH_MT8127)
+/* =========================================================
+   MT8127 board-specific setup (merged from star_mt8127_hw.c)
+
+   Reconstructed from the target boot log and Ghidra decompilation.
+   The target probe uses the kernel virtual bases MAC=0xf1280000,
+   pinmux=0xf0005600, IPLL=0xf0000000 (see star.c). Clock/power
+   registers only read/logged by the decompiled function are not
+   written here.
+   ========================================================= */
+static void mt8127_update_bits(void __iomem *reg, u32 preserve_mask,
+                               u32 set_value)
+{
+	u32 value = readl(reg);
+
+	value = (value & preserve_mask) | set_value;
+	writel(value, reg);
+	/* Read back to ensure the posted MMIO write has completed. */
+	(void)readl(reg);
+}
+
+static int star_mt8127_hw_init(void __iomem *pinmux_base,
+                               void __iomem *extmii_base)
+{
+	if (!pinmux_base || !extmii_base)
+		return -EINVAL;
+
+	/*
+	 * The target uses these as direct pointer constants; do not pass the
+	 * virtual values to ioremap().
+	 *   f0005630 = (old & 0xffff0fff) | 0x00006000
+	 *   f0005640 = (old & 0xffff0000) | 0x00004936
+	 *   f0005650 = (old & 0xffff0000) | 0x00004924
+	 *   f0005660 = (old & 0xfffff000) | 0x00000124
+	 *   f0005680 = (old & 0xffff00ff) | 0x00006c00
+	 */
+	mt8127_update_bits(pinmux_base + 0x30, 0xffff0fffU, 0x00006000U);
+	mt8127_update_bits(pinmux_base + 0x40, 0xffff0000U, 0x00004936U);
+	mt8127_update_bits(pinmux_base + 0x50, 0xffff0000U, 0x00004924U);
+	mt8127_update_bits(pinmux_base + 0x60, 0xfffff000U, 0x00000124U);
+	mt8127_update_bits(pinmux_base + 0x80, 0xffff00ffU, 0x00006c00U);
+
+	/* MAC-window offset 0x94: target log confirms f1280094 = 0x7. */
+	writel(0x7, extmii_base + 0x94);
+	(void)readl(extmii_base + 0x94);
+
+	pr_debug("star: MT8127 pinmux f0005630=0x%08x\n", readl(pinmux_base + 0x30));
+	pr_debug("star: MT8127 pinmux f0005640=0x%08x\n", readl(pinmux_base + 0x40));
+	pr_debug("star: MT8127 pinmux f0005650=0x%08x\n", readl(pinmux_base + 0x50));
+	pr_debug("star: MT8127 pinmux f0005660=0x%08x\n", readl(pinmux_base + 0x60));
+	pr_debug("star: MT8127 pinmux f0005680=0x%08x\n", readl(pinmux_base + 0x80));
+	pr_debug("star: MT8127 external MII f1280094=0x%08x\n",
+	        readl(extmii_base + 0x94));
+
+	return 0;
+}
+
+/*
+ * MT8127 MAC initialization reconstructed from the Ghidra output. It mirrors
+ * the observed target sequence rather than the TV kernel's generic defaults.
+ */
+static int star_mt8127_mac_init(StarDev *dev, const u8 *mac_addr)
+{
+	void __iomem *base;
+	u32 value;
+	int ret;
+
+	if (!dev || !dev->base || !mac_addr)
+		return -EINVAL;
+
+	base = dev->base;
+
+	/* MAC address registers: +0x14 high word, +0x18 low word. */
+	writel(((u32)mac_addr[0] << 8) | (u32)mac_addr[1], base + 0x14);
+	writel(((u32)mac_addr[2] << 24) |
+	       ((u32)mac_addr[3] << 16) |
+	       ((u32)mac_addr[4] << 8)  |
+	       (u32)mac_addr[5], base + 0x18);
+
+	/* Values explicitly written in the target StarMacInit. */
+	writel(0x02117c00U, base + 0x08);
+	writel(0x08000180U, base + 0x0c);
+	writel(0x04000000U, base + 0x60);
+
+	/* The target calls StarMibReset here. */
+	ret = StarMibInit(dev);
+	if (ret)
+		return ret;
+
+	/* Hash-table BIST enable and reset bits observed in target code. */
+	value = readl(base + 0x1c);
+	writel(value | 0x80000000U, base + 0x1c);
+	value = readl(base + 0x5c);
+	writel(value | 0x80000000U, base + 0x5c);
+
+	/* Target clears bit 4, then bit 0, in the register at +0x10. */
+	value = readl(base + 0x10);
+	writel(value & ~0x00000010U, base + 0x10);
+	value = readl(base + 0x10);
+	writel(value & ~0x00000001U, base + 0x10);
+
+	/* Final MAC config update and ARL setting from the decompilation. */
+	value = readl(base + 0x08);
+	writel(value | 0x00400000U, base + 0x08);
+	writel(0x0000000fU, base + 0x20);
+
+	/* Flush posted writes before returning. */
+	(void)readl(base + 0x20);
+	return 0;
+}
+#endif /* CONFIG_ARCH_MT8127 */
+
 /* =========================================================
    Common functions
    ========================================================= */
@@ -211,9 +324,11 @@ int StarDmaInit(StarDev *dev, uintptr_t desc_virAd, dma_addr_t desc_dmaAd)
 
 #ifdef CC_ETHERNET_6896
 #else
-	/* Disable Tx/Rx DMA */
+#if !defined(CONFIG_ARCH_MT8127)
+	/* Disable Tx/Rx DMA (the MT8127 target StarDmaInit does not do this) */
 	StarDmaTxDisable(dev);
 	StarDmaRxDisable(dev);
+#endif
 #endif  
         
 	/* Set Tx/Rx descriptor address */
@@ -227,7 +342,8 @@ int StarDmaInit(StarDev *dev, uintptr_t desc_virAd, dma_addr_t desc_dmaAd)
 #ifdef CC_ETHERNET_6896
     vDmaTxStartAndResetTXDesc(dev);
     vDmaRxStartAndResetRXDesc(dev);
-#else
+#elif !defined(CONFIG_ARCH_MT8127)
+    /* MT8127 target StarDmaInit makes no DMA_CFG write */
     StarSetReg(STAR_DMA_CFG(base),
                 /* STAR_DMA_CFG_RX2BOFSTDIS | */
                 STAR_DMA_CFG_RX_INTR_WDLE | 
@@ -377,6 +493,11 @@ int StarMacInit(StarDev *dev, u8 macAddr[6])
 			{0x06, 0x04}, {0x07, 0x03}, {0x09, 0x02}, {0x0b, 0x01}, {0x0d, 0x00}, {0x21, 0x09},
 			{0x23, 0x0a}, {0x24, 0x0b}, {0x26, 0x0c}, {0x27, 0x0d}, {0x28, 0x0e}, {0x2a, 0x0f}};
 	#endif
+
+#if defined(CONFIG_ARCH_MT8127)
+	/* MT8127: replay the target's StarMacInit register sequence */
+	return star_mt8127_mac_init(dev, macAddr);
+#endif
    
 #if 1
 	#ifdef CC_ETHERNET_6896
@@ -1500,6 +1621,15 @@ int StarHwInit(StarDev *dev)
 {    
 	u32 u4Reg = 0;
     StarPrivate *starPrv = dev->starPrv;
+#if defined(CONFIG_ARCH_MT8127)
+    int mt8127_ret;
+#endif
+
+#if defined(CONFIG_ARCH_MT8127)
+    mt8127_ret = star_mt8127_hw_init(dev->pinmuxBase, dev->base);
+    if (mt8127_ret)
+        return mt8127_ret;
+#endif
 
      /*It's not reasonable that no mac not set hw*/
      /*Remove the mac address checking to StarGetHwMacAddr*/
@@ -1671,8 +1801,14 @@ if (IS_IC_MT5885())
         eth_phy_id = StarDetectPhyId(dev);
         if (eth_phy_id == 32)
         {
+#if defined(CONFIG_ARCH_MT8127)
+            /* Target probe fails when no PHY is detected */
+            STAR_MSG(STAR_ERR, "Cannot detect PHY addr\n");
+            return -ENODEV;
+#else
             eth_phy_id = ETH_DEFAULT_PHY_ADDR;
             STAR_MSG(STAR_ERR, "Cannot detect PHY addr, default to %d\n", eth_phy_id);
+#endif
         }
         else
             STAR_MSG(STAR_DBG, "PHY addr = 0x%04x\n", eth_phy_id);

@@ -11,6 +11,10 @@
 #include <mach/mt5365.h>
 #elif defined (CONFIG_ARCH_MT5395)
 #include <mach/mt5395.h>
+#elif defined (CONFIG_ARCH_MT8127)
+/* MT8127: no mach/platform.h. The MAC/pinmux/IPLL bases are fixed vendor IO
+ * virtual addresses defined in star.c; IO_PHYS/VECTOR_ENET are not needed. */
+#include <linux/io.h>
 #elif defined (CONFIG_ARCH_MT5396) || defined(CONFIG_ARCH_MT5368) || defined(CONFIG_ARCH_MT5389) || defined(CONFIG_ARCH_MT5398) || defined(CONFIG_ARCH_MT5880)|| defined(CONFIG_ARCH_MT5399) || defined(CONFIG_ARCH_MT5890) || defined(CONFIG_ARCH_MT5882) || defined(CONFIG_ARCH_MT5883) || defined(CONFIG_ARCH_MT5891)
 #ifdef CONFIG_ARM64
 #include "linux/soc/mediatek/platform.h"

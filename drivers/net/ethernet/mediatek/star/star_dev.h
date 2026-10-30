@@ -11,8 +11,14 @@
 #define TRUE 1
 #define FALSE 0
 
+#if defined(CONFIG_ARCH_MT8127)
+/* Target StarDmaInit uses 32 x 16-byte descriptors for each ring. */
+#define TX_DESC_NUM         32
+#define RX_DESC_NUM         32
+#else
 #define TX_DESC_NUM         16// 8
 #define RX_DESC_NUM         16
+#endif
 
 #define STARMAC_SUPPORT_ETHTOOL
 
@@ -70,9 +76,13 @@
 /**
  * @brief structure for Tx descriptor Ring
  */
+#if defined(CC_ETHERNET_6896) || defined(CONFIG_ARCH_MT8127)
+#define STAR_DESC_CTRL_FIRST	1	/* word0 = control/ownership, word1 = buffer pointer */
+#endif
+
 typedef struct txDesc_s	/* Tx Ring */
 {
-#ifdef CC_ETHERNET_6896
+#ifdef STAR_DESC_CTRL_FIRST
 u32 ctrlLen;	/* Tx control and length */
 	#define TX_COWN 				(1 << 31)	/* Tx descriptor Own bit; 1: CPU own */
 	#define TX_EOR					(1 << 30)	/* End of Tx descriptor ring */
@@ -114,7 +124,7 @@ u32 buffer; 	/* Tx segment data pointer */
 
 typedef struct rxDesc_s	/* Rx Ring */
 {
-#ifdef CC_ETHERNET_6896
+#ifdef STAR_DESC_CTRL_FIRST
 u32 ctrlLen;	/* Rx control and length */
 	#define RX_COWN 				(1 << 31)	/* RX descriptor Own bit; 1: CPU own */
 	#define RX_EOR					(1 << 30)	/* End of Rx descriptor ring */
@@ -382,8 +392,15 @@ void vStarGetFeedBackCap(StarDev *dev , u32* uLevel);
 #define StarDmaRx2BtOffsetEnable(dev)	StarClearBit(STAR_DMA_CFG((dev)->base), STAR_DMA_CFG_RX2BOFSTDIS)
 #define StarDmaRx2BtOffsetDisable(dev)	StarSetBit(STAR_DMA_CFG((dev)->base), STAR_DMA_CFG_RX2BOFSTDIS)
 
+#if defined(CONFIG_ARCH_MT8127)
+/* Writing 1 (START) reloads the ring pointer from the base address; after the
+ * initial start, kicking a stalled ring must use RESUME (bit 2) instead. */
+#define StarDmaTxResume(dev)			StarSetReg(STAR_TX_DMA_CTRL((dev)->base), (1 << 2))
+#define StarDmaRxResume(dev)			StarSetReg(STAR_RX_DMA_CTRL((dev)->base), (1 << 2))
+#else
 #define StarDmaTxResume(dev)			StarDmaTxEnable(dev)
 #define StarDmaRxResume(dev)			StarDmaRxEnable(dev)
+#endif
 
 #define StarResetHashTable(dev)			StarSetBit(STAR_TEST1((dev)->base), STAR_TEST1_RST_HASH_BIST)
 
