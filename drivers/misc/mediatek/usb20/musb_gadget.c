@@ -2442,12 +2442,9 @@ static void musb_pullup(struct musb *musb, int is_on, bool usb_in)
 
 	if (!usb_in && is_on) {
 		DBG(0, "no USB cable, don't need to turn on USB\n");
-	#ifdef CONFIG_GPIO_USB_DEFAULT_DEVICE_MODE    //because 8127 box have no charger IC
-		DBG(0, "starting USB to default to device mode\n");
-		musb_stop(musb);
-		msleep(10);
-		musb_start(musb);    //default usb device mode
-	#endif
+        #ifdef MTK_ALPS_BOX_SUPPORT    //because 8127 box have no charger IC
+        musb_start(musb);    //default usb device mode
+        #endif
 	} else if (musb->is_host) {
 		DBG(0, "USB is host, don't need to control USB\n");
 	} else if (musb->in_ipo_off) {
@@ -2455,9 +2452,9 @@ static void musb_pullup(struct musb *musb, int is_on, bool usb_in)
 	} else if (is_on) {
 		musb_start(musb);
 	} else {
-	#ifndef CONFIG_GPIO_USB_DEFAULT_DEVICE_MODE    //because 8127 box have no charger IC
-		musb_stop(musb);
-	#endif
+        #ifndef MTK_ALPS_BOX_SUPPORT    //because 8127 box have no charger IC
+        musb_stop(musb);
+        #endif
 	}
 
 	DBG(0,"MUSB: gadget pull up %d end\n", is_on);

@@ -49,6 +49,11 @@ u32 sw_rx = 0;
 u32 sw_uart_path = 0;
 #endif
 
+#ifdef MTK_ALPS_BOX_SUPPORT
+#define VBUS_DETECT_PIN_GPIO (GPIO89 | 0x80000000)
+#define VBUS_DETECT_PIN_EINT 90
+#endif
+
 /*EP Fifo Config*/
 static struct musb_fifo_cfg __initdata fifo_cfg[] = {
 { .hw_ep_num =  1, .style = MUSB_FIFO_TX,   .maxpacket = 512, .ep_mode = EP_BULK,.mode = MUSB_BUF_DOUBLE},
@@ -71,49 +76,13 @@ static struct musb_fifo_cfg __initdata fifo_cfg[] = {
 
 static struct timer_list musb_idle_timer;
 static struct timer_list musb_device_timer;
-#if 1 //CONFIG_Y_CABLE
-static int lk_y_cable;
-
-extern void mt_usb_ext_iddig_int(void);
-#endif
 
 #ifdef CONFIG_GPIO_USB_DEFAULT_DEVICE_MODE
 struct delayed_work change_device_work;
 static void musb_change_device_work(struct work_struct *data)
 {
-#if 1 //CONFIG_Y_CABLE
-	if (1 == lk_y_cable) /* host mode*/
-	{
-		if(mtk_musb->is_active){
-			if(mtk_musb->is_host){/*from host mode*/
-				printk("[USB] error!!!!!!!!\n");
-			}else{//from device
-				printk("[USB]%s:%d step: 1\n", __FUNCTION__, __LINE__);
-				#if 1
-				//step1, goto idle mode
-				mt_usb_disconnect();
-				printk("[USB]%s:%d step: 2\n", __FUNCTION__, __LINE__);
-				//step2, wait a while
-				msleep(1000);
-				printk("[USB]%s:%d step: 3\n", __FUNCTION__, __LINE__);
-				//step3, change to host mode
-				#endif
-				mt_usb_ext_iddig_int();
-				printk("[USB]%s:%d step: done\n", __FUNCTION__, __LINE__);
-			}
-		}else{//from idle or suspend
-			//directly change to host mode
-			mt_usb_ext_iddig_int();
-			printk("[USB]%s:%d step: done\n", __FUNCTION__, __LINE__);
-		}
-	} else {
-		mt_usb_connect();
-		mod_timer(&musb_device_timer, jiffies + msecs_to_jiffies(6000));
-	}
-#else
 	mt_usb_connect();
 	mod_timer(&musb_device_timer, jiffies + msecs_to_jiffies(500));
-#endif
 }
 
 static void musb_change_device(unsigned long _musb)
@@ -376,6 +345,20 @@ bool usb_cable_connected(void)
 		if ((type == STANDARD_HOST) || (type == CHARGING_HOST))
 		return true;
 	}
+#else
+    int i4_vbus_state = 0;
+    
+    i4_vbus_state = mt_get_gpio_in(VBUS_DETECT_PIN_GPIO);
+    DBG(0,"i4_vbus_state = %d\n", i4_vbus_state);
+    
+    if(1 == i4_vbus_state)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 #endif
 		return false;
 #endif // end FPGA_PLATFORM
@@ -868,23 +851,42 @@ static int add_usb_i2c_driver(void)
 }
 #endif //End of FPGA_PLATFORM
 
-#if 1 //CONFIG_Y_CABLE
-static int __init usb_y_cable_setup(char *str)
+
+#ifdef MTK_ALPS_BOX_SUPPORT
+void switch_vbus_int_to_idle()
 {
-	printk("[MUSB]usb_y_cable_setup [%s]!\n", str);
+    mt_eint_set_polarity(VBUS_DETECT_PIN_EINT, MT_EINT_POL_NEG);
+	mt_eint_unmask(VBUS_DETECT_PIN_EINT);
 
-	if (!strcmp(str, "1")) /*host mode */
-		lk_y_cable = 1;
-	else if (!strcmp(str, "0"))
-		lk_y_cable = 0;
-	else
-		lk_y_cable = 0;
-
-	printk("[MUSB]usb_y_cable value %d!\n", lk_y_cable);
-
-	return 1;
+	DBG(0,"vbus switch interrupt for idle detect is done\n");
 }
-__setup("y_cable=", usb_y_cable_setup);
+
+void switch_vbus_int_to_device()
+{
+    mt_eint_set_polarity(VBUS_DETECT_PIN_EINT, MT_EINT_POL_POS);
+	mt_eint_unmask(VBUS_DETECT_PIN_EINT);
+
+	DBG(0,"vbus switch interrupt for device detect is done\n");
+}
+
+static void musb_vbus_pin_detect_work(void)
+{
+    int i4_vbus_state = 0;
+    
+    i4_vbus_state = mt_get_gpio_in(VBUS_DETECT_PIN_GPIO);
+	DBG(0,"i4_vbus_state = %d\n", i4_vbus_state);
+    
+    if(1 == i4_vbus_state)
+    {
+        mt_usb_connect();
+        switch_vbus_int_to_idle();
+    }
+    else
+    {
+        mt_usb_disconnect();
+        switch_vbus_int_to_device();
+    }
+}
 #endif
 
 static int mt_usb_init(struct musb *musb)
@@ -926,12 +928,19 @@ static int mt_usb_init(struct musb *musb)
 #ifdef CONFIG_CMD_MODE_CHANGE
 	musb->force_mode = USB_FORCE_DEVICE;
 #endif
-#if 1 //CONFIG_Y_CABLE
-	if (1 == lk_y_cable) /* host mode*/
-		musb->force_mode = USB_FORCE_HOST;
-#endif
 	INIT_DELAYED_WORK(&change_device_work, musb_change_device_work);
     setup_timer(&musb_device_timer, musb_change_device, (unsigned long) musb);
+#endif
+
+#ifdef MTK_ALPS_BOX_SUPPORT
+    mt_set_gpio_mode(VBUS_DETECT_PIN_GPIO, GPIO_MODE_00);
+    mt_set_gpio_dir(VBUS_DETECT_PIN_GPIO, GPIO_DIR_IN);
+    mt_set_gpio_pull_enable(VBUS_DETECT_PIN_GPIO, GPIO_PULL_ENABLE);
+    mt_set_gpio_pull_select(VBUS_DETECT_PIN_GPIO, GPIO_PULL_DOWN);
+    mt_eint_set_sens(VBUS_DETECT_PIN_EINT, MT_LEVEL_SENSITIVE);
+    mt_eint_set_hw_debounce(VBUS_DETECT_PIN_EINT,64);
+    mt_eint_registration(VBUS_DETECT_PIN_EINT, EINTF_TRIGGER_HIGH, musb_vbus_pin_detect_work, true);
+    DBG(0,"vbus_detect pin init done\n");
 #endif
 
 #ifdef CONFIG_USB_MTK_OTG

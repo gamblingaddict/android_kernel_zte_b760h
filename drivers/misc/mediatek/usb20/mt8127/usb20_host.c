@@ -34,6 +34,11 @@
 
 #ifdef CONFIG_USB_MTK_OTG
 
+#ifdef MTK_ALPS_BOX_SUPPORT
+#define VBUS_DETECT_PIN_GPIO (GPIO89 | 0x80000000)
+#define VBUS_DETECT_PIN_EINT 90
+#endif
+
 extern struct musb *mtk_musb;
 
 static struct musb_fifo_cfg fifo_cfg_host[] = {
@@ -102,6 +107,28 @@ void mt_usb_set_vbus(struct musb *musb, int is_on)
 		}
 
 #endif
+#else
+    if(is_on){
+
+        /* disable VBUS detect pin interrupt */
+        mt_eint_mask(VBUS_DETECT_PIN_EINT);
+        msleep(100);
+        
+        /*close vbus by GPIO37 control VBAT.*/
+        DBG(0,"GPIO37 pull up to plus vbus\n");
+        mt_set_gpio_mode(GPIO37, GPIO_MODE_00);
+        mt_set_gpio_dir(GPIO37, GPIO_DIR_OUT);
+        mt_set_gpio_out(GPIO37, GPIO_OUT_ONE);
+    } else {
+        /*close vbus by GPIO37 control VBAT.*/
+        DBG(0,"GPIO37 pull down to close vbus\n"); 
+        mt_set_gpio_mode(GPIO37, GPIO_MODE_00);
+        mt_set_gpio_dir(GPIO37, GPIO_DIR_OUT);
+        mt_set_gpio_out(GPIO37, GPIO_OUT_ZERO);
+        msleep(100);
+        /* enable VBUS detect pin interrupt */
+        mt_eint_unmask(VBUS_DETECT_PIN_EINT);        
+    }     
 #endif
 }
 
@@ -168,7 +195,7 @@ static bool musb_is_host(void)
 		printk("[USB]%s:%d error !!!!! is_host:%d\n", __FUNCTION__, __LINE__, mtk_musb->is_host);
 	}
 #else
-    iddig_state = mt_get_gpio_in(GPIO38);
+    iddig_state = mt_get_gpio_in(GPIO_OTG_IDDIG_EINT_PIN);
 	DBG(0,"iddig_state = %d\n", iddig_state);
 #endif
 #else
@@ -302,9 +329,6 @@ static void musb_id_pin_work(struct work_struct *data)
 	switch_set_state((struct switch_dev *)&otg_state, mtk_musb->is_host);
 
 	if (mtk_musb->is_host) {
-	#ifdef MTK_ALPS_BOX_SUPPORT    //because 8127 box have no charger IC 		
-		musb_stop(mtk_musb);		
-	#endif		
 		//setup fifo for host mode
 		ep_config_from_table_for_host(mtk_musb);
 		wake_lock(&mtk_musb->usb_lock);
@@ -412,14 +436,6 @@ void mt_usb_iddig_int(struct musb *musb)
 void static otg_int_init(void)
 {
 #ifdef ID_PIN_USE_EX_EINT
-    mt_set_gpio_mode(GPIO38, GPIO_MODE_02);
-    mt_set_gpio_dir(GPIO38, GPIO_DIR_IN);
-    mt_set_gpio_pull_enable(GPIO38, GPIO_PULL_ENABLE);
-    mt_set_gpio_pull_select(GPIO38, GPIO_PULL_UP);
-    mt_eint_set_sens(49, MT_LEVEL_SENSITIVE);
-    mt_eint_set_hw_debounce(49,64);
-    mt_eint_registration(49, EINTF_TRIGGER_LOW, mt_usb_ext_iddig_int, FALSE);
-#if 0
 	mt_set_gpio_mode(GPIO_OTG_IDDIG_EINT_PIN, GPIO_OTG_IDDIG_EINT_PIN_M_IDDIG);
 	mt_set_gpio_dir(GPIO_OTG_IDDIG_EINT_PIN, GPIO_DIR_IN);
 	mt_set_gpio_pull_enable(GPIO_OTG_IDDIG_EINT_PIN, GPIO_PULL_ENABLE);
@@ -428,7 +444,6 @@ void static otg_int_init(void)
 	mt_eint_set_sens(IDDIG_EINT_PIN, MT_LEVEL_SENSITIVE);
 	mt_eint_set_hw_debounce(IDDIG_EINT_PIN,64);
 	mt_eint_registration(IDDIG_EINT_PIN, EINTF_TRIGGER_LOW, mt_usb_ext_iddig_int, FALSE);
-#endif 
 #else
 	u32 phy_id_pull = 0;
 	phy_id_pull = __raw_readl(U2PHYDTM1);

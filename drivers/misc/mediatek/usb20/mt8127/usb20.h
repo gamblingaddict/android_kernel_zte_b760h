@@ -5,7 +5,7 @@
 
 #ifdef CONFIG_USB_MTK_OTG
 #ifdef ID_PIN_USE_EX_EINT
-#define IDDIG_EINT_PIN (49 & ~(0x80000000))
+#define IDDIG_EINT_PIN (45 & ~(0x80000000))
 #else
 #define U2PHYDTM1  (USB_SIF_BASE+0x800 + 0x6c)
 #define ID_PULL_UP 0x0101

@@ -225,6 +225,11 @@ static void android_work(struct work_struct *data)
 	else
 			is_hwconnected = false;
 
+    #ifdef CONFIG_MTK_ALPS_BOX_SUPPORT    //8127 box no charger IC to detect the USB CABLE, so need default set connect.
+        is_hwconnected = true;
+    #endif
+
+
 	pr_debug("[XLOG_INFO][USB]%s: is_hwconnected=%d \n", __func__, is_hwconnected);
 	/* Add for HW/SW connect */
 
