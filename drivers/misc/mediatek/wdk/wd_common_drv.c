@@ -40,6 +40,8 @@
 #define warnmsg(msg...) printk(KERN_WARNING PFX msg);
 #define errmsg(msg...) printk(KERN_WARNING PFX msg);
 
+#define printk_deferred(msg...)
+
 #define MIN_KICK_INTERVAL	 1
 #define MAX_KICK_INTERVAL	30
 #define PROC_WK "wdk"
