@@ -28,6 +28,14 @@
 /* FIXME: IR_KEYPRESS_TIMEOUT should be protocol specific */
 #define IR_KEYPRESS_TIMEOUT 250
 
+static int i4_ir_keypress_timeout = IR_KEYPRESS_TIMEOUT;
+
+void rc_set_keypress_timeout(int i4value)
+{
+	i4_ir_keypress_timeout = i4value;
+}
+EXPORT_SYMBOL_GPL(rc_set_keypress_timeout);
+
 /* Used to keep track of known keymaps */
 static LIST_HEAD(rc_map_list);
 static DEFINE_SPINLOCK(rc_map_lock);

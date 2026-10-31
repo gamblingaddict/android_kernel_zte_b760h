@@ -293,6 +293,8 @@ obj-$(CONFIG_MTK_IN_HOUSE_TEE_SUPPORT) += trustzone/
 #power-loss-test
 obj-$(CONFIG_PWR_LOSS_MTK_TEST) += power-loss-test/
 
+obj-y   +=  irrx/
+
 endif           # end of CONFIG_ARCH_MT6735
 endif		# end of CONFIG_ARCH_MT6795
 
