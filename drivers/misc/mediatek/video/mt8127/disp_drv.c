@@ -1683,6 +1683,33 @@ UINT32 DISP_GetOVLRamSize(void)
                MAX_BUFFER_COUNT * BPP;
 }
 
+static UINT32 vram_from_cmdline = 0;
+
+/* Parse "vram=<bytes>" from the cmdline.
+ * Only matches at the start of the string or after a space.
+ * Returns 0 if absent or invalid. */
+static UINT32 disp_parse_vram_cmdline(const char *cmdline)
+{
+    const char *p = cmdline;
+    char *end;
+    unsigned long val;
+
+    while (p && (p = strstr(p, "vram=")) != NULL) {
+        if (p == cmdline || p[-1] == ' ')
+            break;
+        p += 5;
+    }
+    if (!p)
+        return 0;
+    p += 5;
+
+    val = simple_strtoul(p, &end, 0);
+    if (end == p)
+        return 0;
+
+    return (UINT32)val;
+}
+
 UINT32 DISP_GetVRamSize(void)
 {
     // Use a local static variable to cache the calculated vram size
@@ -1691,6 +1718,14 @@ UINT32 DISP_GetVRamSize(void)
 
     if (0 == vramSize)
     {
+        if (vram_from_cmdline)
+        {
+            vramSize = ALIGN_TO_POW_OF_2(vram_from_cmdline, 0x100000);
+            pr_info("DISP_GetVRamSize: using vram value from cmdline: %u bytes[%dMB]\n",
+                    vramSize, (vramSize>>20));
+            return vramSize;
+        }
+
         disp_drv_init_context();
 
         ///get framebuffer size
@@ -1726,6 +1761,8 @@ UINT32 DISP_GetVRamSizeBoot(char *cmdline)
     {
         return vramSize;
     }
+
+    vram_from_cmdline = disp_parse_vram_cmdline(cmdline);
 
     disp_get_lcm_name_boot(cmdline);
 
