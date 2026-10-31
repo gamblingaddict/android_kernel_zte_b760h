@@ -63,6 +63,18 @@ void release(struct device *dev)
 }
 
 /*
+ * Board-file replacement for the device-tree IRRX node.
+ * id -1 marks the parent device (see mtk_ir_core_probe()).
+ */
+static struct platform_device mtk_ir_dev_parent = {
+	.name = MTK_IR_DRIVER_NAME,
+	.id = -1,
+	.dev = {
+		.release = release,
+		},
+};
+
+/*
 get boot_mode
 */
 MTK_IR_MODE mtk_ir_core_getmode(void)
@@ -644,100 +656,38 @@ static int mtk_ir_core_probe(struct platform_device *pdev)
 
 	struct mtk_ir_core_platform_data *pdata = pdev->dev.platform_data;
 	struct rc_dev *rcdev = NULL;
-	struct resource *res;
-	int index = 0;
 
-	u32 irq_value[3] = { 0, 0, 0 };
-	int irq_trigger_type = 0;
 
 	int ret = 0;
 
-	/* id = -1, it is the device tree IRRX platform_device,
-	   only for register lirc_driver and begin mtk_ir_input_thread,
-	   bause lirc_driver and mtk_ir_input_thread  are for all devices */
+	/* id = -1 is the parent IRRX platform_device. In the DT tree it came from
+	   the device tree; on this board-file kernel it is registered by
+	   mtk_ir_core_init(). It maps the registers, powers the block and
+	   registers lirc_driver and mtk_ir_input_thread, which are shared by all
+	   protocol devices. */
 	if (-1 == pdev->id) {
 		mtk_rc_core.dev_parent = pdev;
-		res = pdev->resource;	/* irrx resource */
-		ASSERT(res != NULL);
+		mtk_rc_core.irq = MTK_IRRX_IRQ_NUMBER;
 
-		IR_LOG_ALWAYS("pdev->name (%s)\n, (pdev->dev).kobj.name (%s)\n", pdev->name,
-			      kobject_name(&(pdev->dev).kobj));
-		IR_LOG_ALWAYS("num_resources = %d\n ", pdev->num_resources);
-
-		for (; index < pdev->num_resources; index++) {
-			if (res->flags & IORESOURCE_MEM) {	/* ok ,this is the irrx  mem resource */
-				if (IRRX_BASE_PHY != 0) {
-
-					/* irrx device tree is wrong ,maybe has duplicate regs */
-					IR_LOG_ALWAYS
-					    ("duplicate irrx regs base (%lx), already detected regs base (%lx)\n",
-					     (unsigned long)res->start, IRRX_BASE_PHY);
-					ASSERT(0);
-				}
-				IRRX_BASE_PHY = res->start;
-				IRRX_BASE_PHY_END = res->end + 1 - IRRX_REGISTER_BYTES;
-			}
-
-			if (res->flags & IORESOURCE_IRQ) {	/* ok this is the irq resource */
-				if (mtk_rc_core.irq != 0) {
-					IR_LOG_ALWAYS
-					    ("duplicate irrx irq(%d), already detected irq	(%d)\n",
-					     (int)res->start, mtk_rc_core.irq);
-					ASSERT(0);
-				}
-				mtk_rc_core.irq = res->start;
-				ret =
-				    of_property_read_u32_array(pdev->dev.of_node, "interrupts",
-							       irq_value, 3);
-				/* get gic all value */
-
-				if (ret) {
-					IR_LOG_ALWAYS("get irrx irq info fail!!! ret=%d\n", ret);
-					ASSERT(0);
-				}
-				IR_LOG_ALWAYS("irq info <%d %d %d>\n", irq_value[0], irq_value[1],
-					      irq_value[2]);
-				irq_trigger_type = (int)(irq_value[2]);
-
-				IR_LOG_ALWAYS("irq_trigger_type = %d\n", irq_trigger_type);
-
-			}
-
-			res++;
+		ret = mtk_ir_hal_clock_probe();	/* ioremap the IRRX registers */
+		if (ret) {
+			IR_LOG_ALWAYS("irrx register map fail ret(%d)\n", ret);
+			return ret;
 		}
-
-		mtk_rc_core.reg_irrx = of_iomap(pdev->dev.of_node, 0);
-		IRRX_BASE_VIRTUAL = (unsigned long)(mtk_rc_core.reg_irrx);
-		ASSERT(IRRX_BASE_VIRTUAL != 0);
-		IRRX_BASE_VIRTUAL_END = IRRX_BASE_VIRTUAL + (IRRX_BASE_PHY_END - IRRX_BASE_PHY);
+		mtk_rc_core.reg_irrx = (void __iomem *)IRRX_BASE_VIRTUAL;
 
 		IR_LOG_ALWAYS("IRRX_BASE_PHY = %lx\n", IRRX_BASE_PHY);
-		IR_LOG_ALWAYS("IRRX_BASE_PHY_END = %lx\n", IRRX_BASE_PHY_END);
 		IR_LOG_ALWAYS("IRRX_BASE_VIRTUAL = %lx\n", IRRX_BASE_VIRTUAL);
-		IR_LOG_ALWAYS("IRRX_BASE_VIRTUAL_END = %lx\n", IRRX_BASE_VIRTUAL_END);
 		IR_LOG_ALWAYS("irq = %d\n", mtk_rc_core.irq);
-		if (IRRX_BASE_VIRTUAL == 0) {
-			IR_LOG_ALWAYS("please check probe info!!!!!!\n");
-			return 0;
-		}
 
-
-		mtk_ir_hal_clock_probe();
+		/* The stock 3.4 driver enables the clock and sets the pin at init and
+		   never gates the clock again. The registers must never be touched
+		   with the clock off. */
 		mt_ir_core_irda_clock_enable(true);
 		mt_ir_core_clock_enable(true);
-
-#ifdef MTK_IRRX_SUPPORT_ENABLE
-		/* set gpio pin as irrx pin function */
 		mtk_ir_core_pin_set();
-		/* if irrx power pin is controled by pmu,then power on it */
 		mt_ir_hal_power_probe();
 		mt_ir_hal_power_enable(true);
-#else
-		/*only box need open clock */
-		mt_ir_core_irda_clock_enable(false);
-		/*only box need open clock */
-		mt_ir_core_clock_enable(false);
-#endif
 
 		ret = mtk_ir_lirc_register(&(pdev->dev));
 		if (ret) {
@@ -802,7 +752,7 @@ static int mtk_ir_core_probe(struct platform_device *pdev)
 	mtk_rc_core.dev_current = pdev;
 	mtk_ir_core_create_attr(&(pdev->dev));
 
-	ret = mtk_ir_core_register_swirq(irq_trigger_type);	/* IRQF_TRIGGER_HIGH */
+	ret = mtk_ir_core_register_swirq(MTK_IRRX_IRQ_TRIGGER);	/* IRQF_TRIGGER_LOW, as stock */
 
 	if (ret) {
 		goto err_request_irq;
@@ -836,7 +786,7 @@ static int mtk_ir_core_remove(struct platform_device *pdev)
 	if (-1 == pdev->id) {	/* it is mtk_ir_dev_parent, it must be the last paltform device to unregister */
 		mtk_ir_lirc_unregister(&mtk_rc_core);	/* unregister lirc driver */
 
-		iounmap(mtk_rc_core.reg_irrx);
+		/* registers were mapped by the HAL and stay mapped */
 		return 0;
 	}
 
@@ -963,6 +913,12 @@ static int __init mtk_ir_core_init(void)
 		IR_LOG_ALWAYS("mtk_ir_core_driver register fail\n");
 		goto fail;
 	}
+	/* the parent (id -1) must exist before any protocol device probes */
+	ret = platform_device_register(&mtk_ir_dev_parent);
+	if (ret) {
+		IR_LOG_ALWAYS("mtk_ir_dev_parent register fail ret(%d)\n", ret);
+		goto fail;
+	}
 #if (MTK_IRRX_PROTOCOL == MTK_IR_ID_NEC)
 	ret = platform_device_register(&(mtk_ir_dev_nec.dev_platform));	/* register  nec device */
 #elif (MTK_IRRX_PROTOCOL == MTK_IR_ID_RC6)
@@ -1014,7 +970,8 @@ static void __exit mtk_ir_core_exit(void)
 		mtk_rc_core.dev_current = NULL;
 	}
 
-	platform_driver_unregister(&mtk_ir_core_driver);	/* for this ,all device will be unregister */
+	platform_driver_unregister(&mtk_ir_core_driver);
+	platform_device_unregister(&mtk_ir_dev_parent);	/* for this ,all device will be unregister */
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	unregister_early_suspend(&mtk_ir_early_suspend_desc);

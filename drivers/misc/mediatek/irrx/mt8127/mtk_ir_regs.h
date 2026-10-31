@@ -16,6 +16,10 @@ extern unsigned long IRRX_BASE_VIRTUAL;
 /*  this value is of_ iomap from device tree's IRRX_BASE_PHY*/
 extern unsigned long IRRX_BASE_VIRTUAL_END;
 
+/* MT8127 board-file glue used by mtk_ir_core.c (no device tree on this kernel) */
+#define MTK_IRRX_IRQ_NUMBER	119	/* irq passed to the stock request_threaded_irq */
+#define MTK_IRRX_IRQ_TRIGGER	8	/* IRQF_TRIGGER_LOW, the stock irqflags */
+
 
 /*   IRRX register define**/
 #define IRRX_COUNT_HIGH_REG        ((unsigned long)0x0000)

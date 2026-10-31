@@ -236,6 +236,9 @@ static int mtk_ir_nec_init_hw(void)
 	}
 
 	rc_map_register(&mtk_nec_map);
+	/* MT8127 stock init zeroes these two registers first (undocumented) */
+	IR_WRITE(0x60, 0);
+	IR_WRITE(0x38, 0);
 	IR_WRITE_MASK(IRRX_IRINT_EN, IRRX_INTEN_MASK, IRRX_INTCLR_OFFSET, 0x0);
 	IR_WRITE(IRRX_CONFIG_HIGH_REG, MTK_NEC_CONFIG);	/* 0xf0021 */
 	IR_WRITE(IRRX_CONFIG_LOW_REG, MTK_NEC_SAPERIOD);
@@ -345,12 +348,23 @@ u32 mtk_ir_nec_decode(void *preserve)
 	u4GroupID = ((pu1Data[1] << 8) + pu1Data[0]);
 
 
-	/* Check GroupId. */
+	/*
+	 * Check GroupId. The MT8127 stock decode does NOT filter on the
+	 * customer code (it only checks code + ~code == 0xff), so this is
+	 * off by default. Set MTK_NEC_CHECK_CUSTOMER_CODE to 1 once the
+	 * customer code in mtk_ir_cus_nec.h matches your remote.
+	 */
+#ifndef MTK_NEC_CHECK_CUSTOMER_CODE
+#define MTK_NEC_CHECK_CUSTOMER_CODE 0
+#endif
+	IR_LOG_KEY("customer code 0x%x\n", u4GroupID);
+#if MTK_NEC_CHECK_CUSTOMER_CODE
 	if (u4GroupID != _u4Nec_customer_code) {
 		IR_LOG_KEY("invalid customer code 0x%x!!!\n", u4GroupID);
 		_u4PrevKey = BTN_NONE;
 		goto end;
 	}
+#endif
 
 	_u4PrevKey = pu1Data[2];
 

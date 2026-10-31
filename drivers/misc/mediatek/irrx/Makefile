@@ -4,7 +4,7 @@
 include $(srctree)/drivers/misc/mediatek/Makefile.custom
 
 
-ifeq ($(MTK_ALPS_BOX_SUPPORT),yes)
+ifeq ($(CONFIG_MTK_ALPS_BOX_SUPPORT),y)
 ccflags-y += -DMTK_IRRX_SUPPORT_ENABLE
 endif
 
