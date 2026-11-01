@@ -506,69 +506,6 @@ swp_entry_t get_swap_page_of_type(int type)
 }
 EXPORT_SYMBOL_GPL(get_swap_page_of_type);
 
-#ifdef CONFIG_MEMCG
-swp_entry_t get_swap_page_by_memcg(struct page *page)
-{
-	struct swap_info_struct *si;
-	int type, next, wrapped;
-	pgoff_t offset;
-
-	/* Go to original get_swap_page if we have only 1 or no swap area. */
-	if (nr_swapfiles <= 1)
-		return get_swap_page();
-
-	spin_lock(&swap_lock);
-	if (atomic_long_read(&nr_swap_pages) <= 0)
-		goto noswap;
-	atomic_long_dec(&nr_swap_pages);
-
-	/* In which memcg */
-	if (memcg_is_root(page)) {
-		/* High to low priority */
-		wrapped = 1;
-		type = swap_list.head;
-	} else {
-		/* Low to high priority */
-		wrapped = 0;
-		si = swap_info[swap_list.head];
-		type = si->next;
-	}
-	
-	/* Scan for an empty swap entry */
-	for (; (type >= 0) || (wrapped == 0); type = next) {
-		if (type < 0) {
-			wrapped++;
-			next = swap_list.head;
-			continue;
-		}
-		
-		si = swap_info[type];
-		next = si->next;
-		spin_lock(&si->lock);
-		if (!si->highest_bit) {
-			spin_unlock(&si->lock);
-			continue;
-		}
-		if (!(si->flags & SWP_WRITEOK)) {
-			spin_unlock(&si->lock);
-			continue;
-		}
-		spin_unlock(&swap_lock);
-		/* This is called for allocating swap entry for cache */
-		offset = scan_swap_map(si, SWAP_HAS_CACHE);
-		spin_unlock(&si->lock);
-		if (offset)
-			return swp_entry(type, offset);
-		spin_lock(&swap_lock);
-	}
-
-	atomic_long_inc(&nr_swap_pages);
-noswap:
-	spin_unlock(&swap_lock);
-	return (swp_entry_t) {0};
-}
-#endif
-
 static unsigned int find_next_to_unuse(struct swap_info_struct *si,
 					unsigned int prev, bool frontswap);
 

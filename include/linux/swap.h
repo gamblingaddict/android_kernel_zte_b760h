@@ -403,8 +403,6 @@ extern void get_swap_range_of_type(int type, swp_entry_t *start,
 		swp_entry_t *end, unsigned int limit);
 
 #ifdef CONFIG_MEMCG
-extern bool memcg_is_root(struct page *page);
-extern swp_entry_t get_swap_page_by_memcg(struct page *page);
 extern void
 mem_cgroup_uncharge_swapcache(struct page *page, swp_entry_t ent, bool swapout);
 #else
