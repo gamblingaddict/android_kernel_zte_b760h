@@ -8,42 +8,38 @@
 #include <linux/err.h>
 #include <linux/syscalls.h>
 
-static char bcb_buf[2048] = "boot-recovery";
+#include "partition_define.h"   /* PartInfo, Region; adjust include path */
+
+extern int PART_NUM;
+extern int eMMC_rw_x(loff_t addr, u32 *buffer, int host_num, int iswrite,
+                     u32 totalsize, int transtype, Region part);
+
+static char bcb_buf[2048] __attribute__((aligned(4))) = "boot-recovery";
 
 static int bcb_reboot_notify(struct notifier_block *nb,
                              unsigned long action, void *data)
 {
     const char *cmd = data;
-    struct file *f;
-    mm_segment_t old_fs;
-    loff_t pos = 0;
-    ssize_t ret;
+    int i, err = -ENODEV;
 
     pr_err("bcb: notify action=%lu cmd=%s\n", action, cmd ? cmd : "(null)");
 
-    if (action != SYS_RESTART || !cmd || strcmp(cmd, "recovery"))
+    if (action != SYS_RESTART || !cmd ||
+        (strcmp(cmd, "recovery") && strcmp(cmd, "bootloader")))
         return NOTIFY_DONE;
 
-    f = filp_open("/dev/misc", O_WRONLY | O_SYNC, 0);
-    sys_sync();
-    if (IS_ERR(f)) {
-        pr_err("bcb: open /dev/misc failed (%ld)\n", PTR_ERR(f));
-        return NOTIFY_DONE;
+    pr_err("bcb: PART_NUM=%d\n", PART_NUM);
+
+    for (i = 0; i < PART_NUM; i++) {
+        if (PartInfo[i].name && !strcmp(PartInfo[i].name, "misc")) {
+            pr_err("bcb: misc at 0x%llx\n", (unsigned long long)PartInfo[i].start_address);
+            err = eMMC_rw_x(PartInfo[i].start_address, (u32 *)bcb_buf,
+                            0, 1, sizeof(bcb_buf), 1, EMMC_PART_USER);
+            break;
+        }
     }
 
-    old_fs = get_fs();
-    set_fs(KERNEL_DS);
-    ret = vfs_write(f, bcb_buf, 14, &pos);
-    set_fs(old_fs);
-
-    if (ret != sizeof(bcb_buf))
-        pr_err("bcb: write returned %zd\n", ret);
-    else {
-        pr_err("bcb: wrote ok\n");
-        vfs_fsync(f, 0);
-    }
-
-    filp_close(f, NULL);
+    pr_err("bcb: write result %d\n", err);
     return NOTIFY_DONE;
 }
 
